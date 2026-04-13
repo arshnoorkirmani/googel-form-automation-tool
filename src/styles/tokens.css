@@ -1,0 +1,12 @@
+:root {
+  --color-canvas: #f3f5f8;
+  --color-surface: #ffffff;
+  --color-surface-alt: #f8fafc;
+  --color-line: #d7dee8;
+  --color-text: #0f172a;
+  --color-muted: #5b6472;
+  --color-accent: #0f766e;
+  --color-success: #15803d;
+  --color-danger: #b91c1c;
+  --color-warning: #b45309;
+}

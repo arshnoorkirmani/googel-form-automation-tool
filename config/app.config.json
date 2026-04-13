@@ -1,0 +1,18 @@
+{
+  "appName": "Dispositions Form Automation",
+  "formUrl": "https://docs.google.com/forms/d/e/1FAIpQLSeElvHr-D5FXndyGFdk5VrcNKprY_wakDRGlmNJytjInZRaUA/viewform",
+  "defaultMode": "DRY_RUN",
+  "maxRetries": 2,
+  "maxBatchRows": 50,
+  "debug": {
+    "enabled": false,
+    "slowMoMs": 250
+  },
+  "paths": {
+    "storageState": "storage/auth/storage-state.json",
+    "authMetadata": "storage/auth/auth-metadata.json",
+    "historyFile": "storage/history/runs.json",
+    "logsDir": "storage/logs",
+    "artifactsDir": "storage/artifacts"
+  }
+}

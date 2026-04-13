@@ -1,0 +1,11 @@
+node_modules
+.next
+out
+dist
+.env
+storage/auth/storage-state.json
+storage/auth/auth-metadata.json
+storage/logs/*.jsonl
+storage/artifacts/*
+!storage/artifacts/.gitkeep
+storage/history/runs.json

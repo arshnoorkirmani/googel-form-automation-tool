@@ -1,0 +1,19 @@
+{
+  "foNumber": "1234567890",
+  "callStatus": "Interested",
+  "omc": "IOCL",
+  "noOfTrucks": "4",
+  "fuelingPotential": "1800",
+  "fuelingFrequency": "3",
+  "remarks": "Customer is interested and asked for a follow-up around planned route activation.",
+  "mode": "DRY_RUN",
+  "debug": false,
+  "interestedReason": "Will Recharge Later",
+  "interestedNextTransaction": {
+    "date": "20-04-2026",
+    "hour": "11",
+    "minute": "30",
+    "meridiem": "AM"
+  },
+  "interestedPlanPitched": "Bonus"
+}
