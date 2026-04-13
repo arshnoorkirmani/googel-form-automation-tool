@@ -5,6 +5,7 @@ export type BatchItemStatus = "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED";
 
 export type BatchItemRecord = {
   foNumber: string;
+  callStatus?: string;
   status: BatchItemStatus;
   errorMessage?: string;
   confirmationMessage?: string;
@@ -21,6 +22,8 @@ export type BatchRunRecord = {
   startedAt?: string;
   completedAt?: string;
   errorMessage?: string;
+  waitingUntil?: string;
+  waitingStartedAt?: string;
 };
 
 declare global {
@@ -105,6 +108,8 @@ class BatchStore {
     const updated: BatchRunRecord = { 
       ...current, 
       status: "STOPPED",
+      waitingUntil: undefined,
+      waitingStartedAt: undefined,
       completedAt: new Date().toISOString()
     };
     this.store.set(batchId, updated);
@@ -116,6 +121,8 @@ class BatchStore {
     const updated: BatchRunRecord = {
       ...current,
       status: "COMPLETED",
+      waitingUntil: undefined,
+      waitingStartedAt: undefined,
       completedAt: new Date().toISOString()
     };
     this.store.set(batchId, updated);
@@ -127,6 +134,8 @@ class BatchStore {
     const updated: BatchRunRecord = {
       ...current,
       status: "FAILED",
+      waitingUntil: undefined,
+      waitingStartedAt: undefined,
       completedAt: new Date().toISOString(),
       errorMessage
     };
@@ -134,9 +143,10 @@ class BatchStore {
     return updated;
   }
 
-  setItemRunning(batchId: string, foNumber: string): BatchRunRecord {
+  setItemRunning(batchId: string, foNumber: string, callStatus?: string): BatchRunRecord {
     return this.updateItem(batchId, foNumber, (item) => ({
       ...item,
+      callStatus: callStatus ?? item.callStatus,
       status: "RUNNING",
       startedAt: item.startedAt ?? new Date().toISOString()
     }));
@@ -146,11 +156,13 @@ class BatchStore {
     batchId: string,
     foNumber: string,
     confirmationMessage: string,
-    screenshotPath?: string
+    screenshotPath?: string,
+    callStatus?: string
   ): BatchRunRecord {
     return this.updateItem(batchId, foNumber, (item) => ({
       ...item,
       status: "SUCCEEDED",
+      callStatus: callStatus ?? item.callStatus,
       confirmationMessage,
       screenshotPath: screenshotPath ?? item.screenshotPath,
       completedAt: new Date().toISOString()
@@ -161,11 +173,13 @@ class BatchStore {
     batchId: string,
     foNumber: string,
     errorMessage: string,
-    screenshotPath?: string
+    screenshotPath?: string,
+    callStatus?: string
   ): BatchRunRecord {
     return this.updateItem(batchId, foNumber, (item) => ({
       ...item,
       status: "FAILED",
+      callStatus: callStatus ?? item.callStatus,
       errorMessage,
       screenshotPath: screenshotPath ?? item.screenshotPath,
       completedAt: new Date().toISOString()
@@ -182,6 +196,28 @@ class BatchStore {
       startedAt: undefined,
       completedAt: undefined
     }));
+  }
+
+  setWaiting(batchId: string, delaySeconds: number, now = new Date()): BatchRunRecord {
+    const current = this.mustGet(batchId);
+    const updated: BatchRunRecord = {
+      ...current,
+      waitingStartedAt: now.toISOString(),
+      waitingUntil: new Date(now.getTime() + delaySeconds * 1000).toISOString()
+    };
+    this.store.set(batchId, updated);
+    return updated;
+  }
+
+  clearWaiting(batchId: string): BatchRunRecord {
+    const current = this.mustGet(batchId);
+    const updated: BatchRunRecord = {
+      ...current,
+      waitingStartedAt: undefined,
+      waitingUntil: undefined
+    };
+    this.store.set(batchId, updated);
+    return updated;
   }
 
   private updateItem(

@@ -14,12 +14,22 @@ export function BatchProgressPanel({
 }) {
   const [activeRun, setActiveRun] = useState<BatchRunRecord | null>(null);
   const pollerRef = useRef<number | null>(null);
+  const inFlightRef = useRef(false);
+  const countdownRef = useRef<number | null>(null);
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
 
   const [screenshotModal, setScreenshotModal] = useState<string | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
 
   useEffect(() => {
-    pollerRef.current = window.setInterval(async () => {
+    const fetchStatus = async () => {
+      if (inFlightRef.current) {
+        return;
+      }
+      if (document.hidden) {
+        return;
+      }
+      inFlightRef.current = true;
       try {
         const response = await fetch(`/api/batch-runs/${batchId}`);
         if (response.ok) {
@@ -27,7 +37,11 @@ export function BatchProgressPanel({
           if (batchRun) {
             setActiveRun(batchRun);
 
-            if (batchRun.status === "COMPLETED" || batchRun.status === "FAILED" || batchRun.status === "STOPPED") {
+            if (
+              batchRun.status === "COMPLETED" ||
+              batchRun.status === "FAILED" ||
+              batchRun.status === "STOPPED"
+            ) {
               if (pollerRef.current) {
                 window.clearInterval(pollerRef.current);
                 pollerRef.current = null;
@@ -35,10 +49,15 @@ export function BatchProgressPanel({
             }
           }
         }
-      } catch (err) {
+      } catch {
         // ignore network error
+      } finally {
+        inFlightRef.current = false;
       }
-    }, 1500);
+    };
+
+    void fetchStatus();
+    pollerRef.current = window.setInterval(fetchStatus, 3000);
 
     return () => {
       if (pollerRef.current) {
@@ -46,6 +65,28 @@ export function BatchProgressPanel({
       }
     };
   }, [batchId]);
+
+  useEffect(() => {
+    const waiting = activeRun?.waitingUntil && activeRun.status === "RUNNING";
+    if (!waiting) {
+      if (countdownRef.current) {
+        window.clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
+      return;
+    }
+
+    countdownRef.current = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 250);
+
+    return () => {
+      if (countdownRef.current) {
+        window.clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
+    };
+  }, [activeRun?.waitingUntil, activeRun?.status]);
 
   const handleRetry = async (foNumber: string) => {
     if (!activeRun) return;
@@ -89,6 +130,12 @@ export function BatchProgressPanel({
         return "text-text bg-surface-alt";
     }
   };
+
+  const waitingUntil = activeRun?.waitingUntil
+    ? Date.parse(activeRun.waitingUntil)
+    : null;
+  const remainingSeconds =
+    waitingUntil !== null ? Math.max(0, (waitingUntil - nowMs) / 1000) : null;
 
   if (!activeRun) {
     return (
@@ -151,6 +198,18 @@ export function BatchProgressPanel({
           ) : null}
         </div>
 
+        {activeRun.status === "PAUSED" || activeRun.status === "PAUSING" ? (
+          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Paused. Waiting will resume after you click Resume.
+          </div>
+        ) : null}
+
+        {activeRun.status === "RUNNING" && remainingSeconds !== null ? (
+          <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+            Next form starts in {remainingSeconds.toFixed(1)}s
+          </div>
+        ) : null}
+
         {activeRun.errorMessage && (
            <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
              Critical Error: {activeRun.errorMessage}
@@ -162,6 +221,7 @@ export function BatchProgressPanel({
               <thead className="bg-surface-alt font-medium text-muted">
                  <tr>
                     <th className="px-4 py-3">FO Number</th>
+                    <th className="px-4 py-3">Call Status</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Message</th>
                     <th className="px-4 py-3 text-right">Actions</th>
@@ -171,6 +231,12 @@ export function BatchProgressPanel({
                  {activeRun.items.map((item) => (
                     <tr key={item.foNumber} className="hover:bg-surface-alt/50">
                        <td className="px-4 py-3 font-medium text-text">{item.foNumber}</td>
+                       <td className="px-4 py-3 text-muted">
+                         {item.callStatus ??
+                           (activeRun.submission.callStatus === "Random Unsupported"
+                             ? "-"
+                             : activeRun.submission.callStatus)}
+                       </td>
                        <td className="px-4 py-3">
                           <span className={`inline-block rounded-md px-2 py-1 text-xs ${getStatusClasses(item.status)}`}>
                              {item.status}

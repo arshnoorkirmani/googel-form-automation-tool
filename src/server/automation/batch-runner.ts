@@ -75,7 +75,12 @@ class BatchAutomationRunner {
         }
         // -------------------------------------------------
 
-        batchStore.setItemRunning(batchId, foNumber);
+        let currentCallStatus = submission.callStatus;
+        if (currentCallStatus === "Random Unsupported") {
+          currentCallStatus = getRandomUnsupported();
+        }
+
+        batchStore.setItemRunning(batchId, foNumber, currentCallStatus);
 
         try {
           if (needsFullNavigation) {
@@ -87,11 +92,6 @@ class BatchAutomationRunner {
             if (validation.state !== "VALID") {
               throw new ReAuthRequiredError(validation.reason);
             }
-          }
-
-          let currentCallStatus = submission.callStatus;
-          if (currentCallStatus === "Random Unsupported") {
-            currentCallStatus = getRandomUnsupported();
           }
 
           const singleFormPayload: SubmissionPayload = {
@@ -115,14 +115,15 @@ class BatchAutomationRunner {
             batchId,
             foNumber,
             remarksResult.confirmationMessage,
-            screenshotPath
+            screenshotPath,
+            currentCallStatus
           );
 
           // Use user-configured delay directly (seconds → ms), fallback to 10s
           const delaySec = typeof submission.delaySeconds === "number" && submission.delaySeconds > 0
             ? submission.delaySeconds
             : 10;
-          await page.waitForTimeout(delaySec * 1000);
+          await this.waitWithControl(batchId, delaySec);
 
           // Handle next loop iteration
           if (submission.mode === "SUBMIT" && remarksResult.submitted) {
@@ -150,7 +151,13 @@ class BatchAutomationRunner {
              itemScreenshotPath = await artifactService.captureScreenshot(page, batchId, `error-${foNumber}`);
           } catch(e) {}
 
-          batchStore.setItemFailed(batchId, foNumber, itemErrorMessage, itemScreenshotPath);
+          batchStore.setItemFailed(
+            batchId,
+            foNumber,
+            itemErrorMessage,
+            itemScreenshotPath,
+            currentCallStatus
+          );
 
           // If an item failed, it is likely the form state is tangled.
           // Force a full re-navigation for the next item.
@@ -187,6 +194,51 @@ class BatchAutomationRunner {
       ...record.submission,
       foNumberList: itemIds
     });
+  }
+
+  private async waitWithControl(batchId: string, delaySeconds: number): Promise<void> {
+    let remainingMs = Math.max(0, delaySeconds * 1000);
+    if (remainingMs <= 0) {
+      return;
+    }
+
+    let paused = false;
+
+    while (remainingMs > 0) {
+      const record = batchStore.get(batchId);
+      if (!record) {
+        return;
+      }
+
+      if (record.status === "STOPPING" || record.status === "STOPPED") {
+        batchStore.setBatchStopped(batchId);
+        return;
+      }
+
+      if (record.status === "PAUSING" || record.status === "PAUSED") {
+        if (!paused) {
+          if (record.status === "PAUSING") {
+            batchStore.setBatchPaused(batchId);
+          }
+          batchStore.clearWaiting(batchId);
+          paused = true;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        continue;
+      }
+
+      if (paused) {
+        paused = false;
+      }
+
+      const chunkMs = Math.min(remainingMs, 500);
+      const now = new Date();
+      batchStore.setWaiting(batchId, remainingMs / 1000, now);
+      await new Promise((resolve) => setTimeout(resolve, chunkMs));
+      remainingMs -= chunkMs;
+    }
+
+    batchStore.clearWaiting(batchId);
   }
 }
 
