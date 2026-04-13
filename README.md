@@ -140,6 +140,32 @@ npm run prepare:storage
 npm run seed:sample
 ```
 
+## Windows Desktop Packaging (No-Command Users)
+
+This app can be packaged into a Windows installer so non-programmers can run it
+without any terminal commands.
+
+### Build the Installer
+
+```bash
+npm install
+npm run build
+npm run dist:win
+```
+
+The installer will be created inside the `dist/` directory.
+
+### User Workflow
+
+1. Install the generated `Setup.exe`.
+2. Launch `Dispositions Form Automation`.
+3. Complete the one-time login setup with an authorized `@blackbuck.com` account.
+
+### Notes
+
+- Do not share `storage/auth/storage-state.json` or `storage/auth/auth-metadata.json`.
+- Each user must complete login setup on their own machine.
+
 ## Manual Operator Steps
 
 ### One-Time Login Setup

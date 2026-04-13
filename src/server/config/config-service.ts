@@ -45,6 +45,14 @@ class ConfigService {
     const raw = await readFile(configPath, "utf8");
     const parsed = JSON.parse(raw) as RawAppConfig;
 
+    const storageRoot = process.env.APP_STORAGE_ROOT;
+    const resolveStoragePath = (relativePath: string) =>
+      path.isAbsolute(relativePath)
+        ? relativePath
+        : storageRoot
+          ? path.resolve(storageRoot, relativePath)
+          : toAbsolutePath(relativePath);
+
     const resolved: AppConfig = {
       ...parsed,
       formUrl: process.env.APP_FORM_URL ?? parsed.formUrl,
@@ -58,11 +66,11 @@ class ConfigService {
         )
       },
       paths: {
-        storageState: toAbsolutePath(parsed.paths.storageState),
-        authMetadata: toAbsolutePath(parsed.paths.authMetadata),
-        historyFile: toAbsolutePath(parsed.paths.historyFile),
-        logsDir: toAbsolutePath(parsed.paths.logsDir),
-        artifactsDir: toAbsolutePath(parsed.paths.artifactsDir)
+        storageState: resolveStoragePath(parsed.paths.storageState),
+        authMetadata: resolveStoragePath(parsed.paths.authMetadata),
+        historyFile: resolveStoragePath(parsed.paths.historyFile),
+        logsDir: resolveStoragePath(parsed.paths.logsDir),
+        artifactsDir: resolveStoragePath(parsed.paths.artifactsDir)
       }
     };
 
