@@ -28,7 +28,7 @@ describe("submissionSchema", () => {
   it("rejects unsupported call statuses", () => {
     const result = submissionSchema.safeParse({
       foNumber: "FO-1002",
-      callStatus: "Call Drop",
+      callStatus: "Random Unsupported",
       omc: "RIL",
       noOfTrucks: "2",
       fuelingPotential: "1200",

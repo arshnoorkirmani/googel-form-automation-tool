@@ -23,6 +23,12 @@ export async function fillBranchPage(
     case "Not Interested":
       await handleNotInterestedBranch(page, submission);
       return;
+    case "Call Disconnected":
+    case "Call Drop":
+    case "Not Connected":
+    case "Language Barrier":
+      // These statuses do not have additional Page 2 fields.
+      return;
     default:
       throw new Error(
         `Call Status "${submission.callStatus}" is not supported in the MVP.`

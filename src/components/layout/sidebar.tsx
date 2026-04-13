@@ -10,6 +10,7 @@ const navigationItems = [
   { href: "/submissions/new", label: "New Submission" },
   { href: "/batch", label: "Batch Upload" },
   { href: "/history", label: "History" },
+  { href: "/data-management", label: "Data Management" },
   { href: "/settings", label: "Settings" }
 ];
 

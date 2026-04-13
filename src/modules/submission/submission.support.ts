@@ -1,5 +1,6 @@
 import {
   ALL_CALL_STATUSES,
+  NO_BRANCH_CALL_STATUSES,
   SUPPORTED_CALL_STATUSES,
   type CallStatus,
   type SubmissionFormValues,
@@ -48,6 +49,14 @@ export function isUnsupportedCallStatus(
   );
 }
 
+export function isBranchlessCallStatus(
+  value: string
+): value is (typeof NO_BRANCH_CALL_STATUSES)[number] {
+  return NO_BRANCH_CALL_STATUSES.includes(
+    value as (typeof NO_BRANCH_CALL_STATUSES)[number]
+  );
+}
+
 export function clearBranchFields(
   values: SubmissionFormValues
 ): SubmissionFormValues {
@@ -70,6 +79,10 @@ export function getBranchTitle(callStatus: CallStatus | ""): string {
 
   if (isUnsupportedCallStatus(callStatus)) {
     return `${callStatus} is not supported in the MVP`;
+  }
+
+  if (isBranchlessCallStatus(callStatus)) {
+    return `${callStatus} - No additional fields`;
   }
 
   return `${callStatus} Branch Details`;

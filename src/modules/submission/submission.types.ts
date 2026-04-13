@@ -7,10 +7,16 @@ export const SUPPORTED_CALL_STATUSES = [
   "Interested",
   "Follow Up",
   "Call Back",
-  "Not Interested"
+  "Not Interested",
+  "Call Disconnected",
+  "Call Drop",
+  "Not Connected",
+  "Language Barrier"
 ] as const;
 
-export const UNSUPPORTED_CALL_STATUSES = [
+export const UNSUPPORTED_CALL_STATUSES = [] as const;
+
+export const NO_BRANCH_CALL_STATUSES = [
   "Call Disconnected",
   "Call Drop",
   "Not Connected",

@@ -3,6 +3,7 @@ import type { FieldErrors, UseFormRegister } from "react-hook-form";
 import { FieldError } from "@/components/shared/field-error";
 import {
   getBranchTitle,
+  isBranchlessCallStatus,
   isUnsupportedCallStatus
 } from "@/modules/submission/submission.support";
 import {
@@ -13,9 +14,9 @@ import {
 } from "@/modules/submission/submission.types";
 
 type BranchFieldsSectionProps = {
-  callStatus: SubmissionFormValues["callStatus"];
-  register: UseFormRegister<SubmissionFormValues>;
-  errors: FieldErrors<SubmissionFormValues>;
+  callStatus: any;
+  register: UseFormRegister<any>;
+  errors: FieldErrors<any>;
 };
 
 function DateTimeFields({
@@ -29,10 +30,10 @@ function DateTimeFields({
     | "followUpNextCall"
     | "callBackNextCall";
   label: string;
-  register: UseFormRegister<SubmissionFormValues>;
-  errors: FieldErrors<SubmissionFormValues>;
+  register: UseFormRegister<any>;
+  errors: FieldErrors<any>;
 }) {
-  const groupErrors = errors[prefix];
+  const groupErrors = errors[prefix] as any;
 
   return (
     <div className="rounded-xl border border-line bg-white p-4">
@@ -116,6 +117,13 @@ export function BranchFieldsSection({
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           {callStatus} is intentionally blocked in the MVP. Only Interested, Follow Up,
           Call Back, and Not Interested are automated right now.
+        </p>
+      ) : null}
+
+      {callStatus && isBranchlessCallStatus(callStatus) ? (
+        <p className="rounded-xl border border-line bg-white px-4 py-3 text-sm text-muted">
+          No additional branch fields are required for {callStatus}. Continue to
+          Remarks on Page 3.
         </p>
       ) : null}
 

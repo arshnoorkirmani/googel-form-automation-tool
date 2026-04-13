@@ -8,10 +8,11 @@ import {
 } from "@/modules/submission/submission.types";
 
 type CommonFieldsSectionProps = {
-  register: UseFormRegister<SubmissionFormValues>;
-  errors: FieldErrors<SubmissionFormValues>;
-  callStatus: SubmissionFormValues["callStatus"];
+  register: UseFormRegister<any>;
+  errors: FieldErrors<any>;
+  callStatus: any;
   onCallStatusChange: (nextValue: string) => void;
+  hideFoNumber?: boolean;
 };
 
 function InputField({
@@ -22,9 +23,9 @@ function InputField({
   type = "text"
 }: {
   label: string;
-  name: keyof SubmissionFormValues;
-  register: UseFormRegister<SubmissionFormValues>;
-  errors: FieldErrors<SubmissionFormValues>;
+  name: string;
+  register: UseFormRegister<any>;
+  errors: FieldErrors<any>;
   type?: string;
 }) {
   return (
@@ -44,7 +45,8 @@ export function CommonFieldsSection({
   register,
   errors,
   callStatus,
-  onCallStatusChange
+  onCallStatusChange,
+  hideFoNumber
 }: CommonFieldsSectionProps) {
   const callStatusField = register("callStatus");
 
@@ -56,12 +58,14 @@ export function CommonFieldsSection({
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <InputField
-          label="FO Number"
-          name="foNumber"
-          register={register}
-          errors={errors}
-        />
+        {!hideFoNumber && (
+          <InputField
+            label="FO Number"
+            name="foNumber"
+            register={register}
+            errors={errors}
+          />
+        )}
 
         <label className="block">
           <span className="mb-2 block text-sm font-medium text-text">
@@ -79,6 +83,9 @@ export function CommonFieldsSection({
             className="w-full rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-text outline-none focus:border-accent"
           >
             <option value="">Select Call Status</option>
+            {hideFoNumber && (
+              <option value="Random Unsupported">Random Unsupported</option>
+            )}
             {CALL_STATUS_UI_OPTIONS.map((option) => (
               <option
                 key={option.value}

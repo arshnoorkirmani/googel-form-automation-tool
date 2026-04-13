@@ -14,6 +14,10 @@ Windows-local internal automation tool for Blackbuck to automate a restricted Go
   - Follow Up
   - Call Back
   - Not Interested
+  - Call Disconnected
+  - Call Drop
+  - Not Connected
+  - Language Barrier
 - Persists:
   - auth session metadata
   - run history
@@ -219,12 +223,17 @@ Covered checks include:
 
 1. Start the app locally.
 2. Confirm `Dashboard`, `New Submission`, `Batch Upload`, `History`, and `Settings` load.
+3. Confirm `Data Management` loads and shows storage summary.
 3. Run login setup once with the authorized account.
 4. Execute one `DRY_RUN` per supported branch:
    - Interested
    - Follow Up
    - Call Back
    - Not Interested
+   - Call Disconnected
+   - Call Drop
+   - Not Connected
+   - Language Barrier
 5. Confirm progress updates appear in the side panel.
 6. Confirm `History` shows the completed run.
 7. Confirm logs and screenshot artifacts are saved locally.
@@ -236,12 +245,15 @@ Covered checks include:
 - Follow Up
 - Call Back
 - Not Interested
+- Call Disconnected
+- Call Drop
+- Not Connected
+- Language Barrier
 
 ## Not Yet Enabled
 
 - Google Sheet ingestion
 - Full batch execution UI
-- Additional Call Status branches
 - Multi-operator concurrency controls
 - Artifact preview inside the dashboard
 

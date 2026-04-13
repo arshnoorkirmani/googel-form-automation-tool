@@ -62,7 +62,7 @@ const optionalDateTimeValueSchema = z.preprocess(
   dateTimeValueSchema.optional()
 );
 
-export const submissionSchema = z
+export const baseSubmissionSchema = z
   .object({
     foNumber: z.string().trim().min(1, "FO Number is required"),
     callStatus: z
@@ -112,7 +112,9 @@ export const submissionSchema = z
       NOT_INTERESTED_OPTIONS,
       "Select a valid Not Interested value"
     )
-  })
+  });
+
+export const submissionSchema = baseSubmissionSchema
   .superRefine((values, context) => {
     switch (values.callStatus) {
       case "Interested":

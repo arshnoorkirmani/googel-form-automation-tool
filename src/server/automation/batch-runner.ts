@@ -1,0 +1,193 @@
+import type { Page } from "playwright";
+
+import type { BatchSubmissionPayload } from "@/modules/submission/batch.schema";
+import type { SubmissionPayload } from "@/modules/submission/submission.schema";
+import { authService, ReAuthRequiredError } from "@/server/auth/auth-service";
+import { sessionValidator } from "@/server/auth/session-validator";
+import { browserFactory, type BrowserSession } from "@/server/automation/browser-factory";
+import { fillBranchPage } from "@/server/automation/form/page2/branch-router";
+import { fillCommonPage } from "@/server/automation/form/page1-common";
+import { fillRemarksPage } from "@/server/automation/form/page3-remarks";
+import { withRetries } from "@/server/automation/retry";
+import { configService } from "@/server/config/config-service";
+import { createLogger } from "@/server/logging/logger";
+import { artifactService } from "@/server/reports/artifact-service";
+import { batchStore } from "@/server/runs/batch-store";
+import { waitForFormReady } from "./form/form-helpers";
+
+const RANDOM_UNSUPPORTED_OPTIONS = [
+  "Call Disconnected",
+  "Call Drop",
+  "Not Connected",
+  "Language Barrier"
+];
+
+function getRandomUnsupported() {
+  const index = Math.floor(Math.random() * RANDOM_UNSUPPORTED_OPTIONS.length);
+  return RANDOM_UNSUPPORTED_OPTIONS[index]!;
+}
+
+class BatchAutomationRunner {
+  async execute(batchId: string, submission: BatchSubmissionPayload): Promise<void> {
+    const logger = createLogger(batchId);
+    const config = await configService.getConfig();
+    let session: BrowserSession | null = null;
+    let page: Page | null = null;
+
+    batchStore.setBatchRunning(batchId);
+
+    try {
+      await authService.assertValidSession();
+      await logger.info("batch.session.loaded", { mode: submission.mode });
+
+      session = await browserFactory.createSession({
+        debug: submission.debug,
+        useSavedSession: true
+      });
+
+      if (!session) {
+        throw new Error("Browser session could not be created.");
+      }
+
+      page = await session.context.newPage();
+      
+      let needsFullNavigation = true;
+
+      for (const foNumber of submission.foNumberList) {
+        // ---------------- Lifecycle Hooks ----------------
+        while (true) {
+          const rec = batchStore.get(batchId);
+          if (!rec) break;
+          
+          if (rec.status === "STOPPING" || rec.status === "STOPPED") {
+            batchStore.setBatchStopped(batchId);
+            return; // Will gracefully trigger the finally block to close the browser
+          }
+          
+          if (rec.status === "PAUSING" || rec.status === "PAUSED") {
+            if (rec.status === "PAUSING") {
+              batchStore.setBatchPaused(batchId);
+            }
+            await new Promise(r => setTimeout(r, 1000));
+          } else {
+            break;
+          }
+        }
+        // -------------------------------------------------
+
+        batchStore.setItemRunning(batchId, foNumber);
+
+        try {
+          if (needsFullNavigation) {
+            await page.goto(config.formUrl, {
+              waitUntil: "domcontentloaded",
+              timeout: 60_000
+            });
+            const validation = await sessionValidator.validateFormAccess(page);
+            if (validation.state !== "VALID") {
+              throw new ReAuthRequiredError(validation.reason);
+            }
+          }
+
+          let currentCallStatus = submission.callStatus;
+          if (currentCallStatus === "Random Unsupported") {
+            currentCallStatus = getRandomUnsupported();
+          }
+
+          const singleFormPayload: SubmissionPayload = {
+            ...submission,
+            foNumber,
+            callStatus: currentCallStatus as any
+            // The typing issue here is because submission.callStatus allows "Random Unsupported"
+          };
+
+          await fillCommonPage(page, singleFormPayload);
+          await fillBranchPage(page, singleFormPayload);
+          const remarksResult = await fillRemarksPage(page, singleFormPayload);
+
+          const screenshotPath = await artifactService.captureScreenshot(
+            page,
+            batchId,
+            `success-${foNumber}`
+          );
+
+          batchStore.setItemSucceeded(
+            batchId,
+            foNumber,
+            remarksResult.confirmationMessage,
+            screenshotPath
+          );
+
+          // Use user-configured delay directly (seconds → ms), fallback to 10s
+          const delaySec = typeof submission.delaySeconds === "number" && submission.delaySeconds > 0
+            ? submission.delaySeconds
+            : 10;
+          await page.waitForTimeout(delaySec * 1000);
+
+          // Handle next loop iteration
+          if (submission.mode === "SUBMIT" && remarksResult.submitted) {
+            // Click "Submit another response"
+            // Wait for form to become ready again.
+            // On Google Forms, the link is an <a> tag pointing to the form URL.
+            const anotherResponseLink = page.locator("a", { hasText: "Submit another response" }).first();
+            
+            if (await anotherResponseLink.count() > 0) {
+              await anotherResponseLink.click();
+              await waitForFormReady(page);
+              needsFullNavigation = false;
+            } else {
+              needsFullNavigation = true;
+            }
+          } else {
+             // In DRY_RUN, it stays on the last page. To run next, we MUST navigate.
+             needsFullNavigation = true;
+          }
+
+        } catch (itemError) {
+          const itemErrorMessage = itemError instanceof Error ? itemError.message : "Unknown item error";
+          let itemScreenshotPath;
+          try {
+             itemScreenshotPath = await artifactService.captureScreenshot(page, batchId, `error-${foNumber}`);
+          } catch(e) {}
+
+          batchStore.setItemFailed(batchId, foNumber, itemErrorMessage, itemScreenshotPath);
+
+          // If an item failed, it is likely the form state is tangled.
+          // Force a full re-navigation for the next item.
+          needsFullNavigation = true;
+
+          // If auth issue, throw entirely
+          if (itemError instanceof ReAuthRequiredError) {
+            throw itemError;
+          }
+        }
+      }
+
+      batchStore.setBatchCompleted(batchId);
+      await logger.info("batch.completed", { batchId });
+
+    } catch (batchError) {
+      const errorMessage = batchError instanceof Error ? batchError.message : "Fail to run batch.";
+      batchStore.setBatchFailed(batchId, errorMessage);
+      await logger.error("batch.failed", { error: errorMessage });
+    } finally {
+      if (session) {
+        await session.context.close().catch(() => undefined);
+        await session.browser.close().catch(() => undefined);
+      }
+    }
+  }
+
+  // Support retry functionality
+  async retry(batchId: string, itemIds: string[]): Promise<void> {
+    const record = batchStore.get(batchId);
+    if (!record) throw new Error("Batch not found.");
+
+    await this.execute(batchId, {
+      ...record.submission,
+      foNumberList: itemIds
+    });
+  }
+}
+
+export const batchAutomationRunner = new BatchAutomationRunner();
