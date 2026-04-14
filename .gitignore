@@ -9,3 +9,6 @@ storage/logs/*.jsonl
 storage/artifacts/*
 !storage/artifacts/.gitkeep
 storage/history/runs.json
+*.tsbuildinfo
+.DS_Store
+*.log
