@@ -18,7 +18,9 @@ export async function fillCommonPage(
   await checkCheckboxQuestion(page, PAGE_LABELS.emailCheckbox);
   await fillTextQuestion(page, PAGE_LABELS.foNumber, submission.foNumber);
   await selectDropdownQuestion(page, PAGE_LABELS.callStatus, submission.callStatus);
-  await selectDropdownQuestion(page, PAGE_LABELS.omc, submission.omc);
+  if (submission.omc) {
+    await selectDropdownQuestion(page, PAGE_LABELS.omc, submission.omc);
+  }
   await fillTextQuestion(page, PAGE_LABELS.noOfTrucks, submission.noOfTrucks);
   await fillTextQuestion(
     page,

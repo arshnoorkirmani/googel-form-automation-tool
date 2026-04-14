@@ -66,7 +66,9 @@ class BatchStore {
     const updated: BatchRunRecord = {
       ...current,
       status: "RUNNING",
-      startedAt: current.startedAt ?? new Date().toISOString()
+      startedAt: current.startedAt ?? new Date().toISOString(),
+      completedAt: undefined,
+      errorMessage: undefined
     };
     this.store.set(batchId, updated);
     return updated;

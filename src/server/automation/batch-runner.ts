@@ -50,8 +50,18 @@ class BatchAutomationRunner {
       }
 
       page = await session.context.newPage();
-      
+
       let needsFullNavigation = true;
+
+      const ensurePage = async () => {
+        if (!session) {
+          throw new Error("Browser session could not be created.");
+        }
+        if (!page || page.isClosed()) {
+          page = await session.context.newPage();
+          needsFullNavigation = true;
+        }
+      };
 
       for (const foNumber of submission.foNumberList) {
         // ---------------- Lifecycle Hooks ----------------
@@ -83,6 +93,8 @@ class BatchAutomationRunner {
         batchStore.setItemRunning(batchId, foNumber, currentCallStatus);
 
         try {
+          await ensurePage();
+
           if (needsFullNavigation) {
             await page.goto(config.formUrl, {
               waitUntil: "domcontentloaded",
@@ -162,6 +174,13 @@ class BatchAutomationRunner {
           // If an item failed, it is likely the form state is tangled.
           // Force a full re-navigation for the next item.
           needsFullNavigation = true;
+          if (page?.isClosed()) {
+            try {
+              page = await session.context.newPage();
+            } catch {
+              // ignore recovery errors, next loop will try to recover
+            }
+          }
 
           // If auth issue, throw entirely
           if (itemError instanceof ReAuthRequiredError) {

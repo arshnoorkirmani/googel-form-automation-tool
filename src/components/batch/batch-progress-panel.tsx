@@ -20,6 +20,10 @@ export function BatchProgressPanel({
 
   const [screenshotModal, setScreenshotModal] = useState<string | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [isRetryingAll, setIsRetryingAll] = useState(false);
+  const [actionPending, setActionPending] = useState<
+    "PAUSE" | "RESUME" | "STOP" | null
+  >(null);
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -105,15 +109,36 @@ export function BatchProgressPanel({
     }
   };
 
+  const handleRetryAll = async (itemIds: string[]) => {
+    if (!activeRun || itemIds.length === 0) return;
+    try {
+      setIsRetryingAll(true);
+      await fetch(`/api/batch-runs/${activeRun.batchId}/retry`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemIds })
+      });
+    } catch {
+      // ignore
+    } finally {
+      setIsRetryingAll(false);
+    }
+  };
+
   const handleAction = async (action: "PAUSE" | "RESUME" | "STOP") => {
     if (!activeRun) return;
     try {
+       setActionPending(action);
        await fetch(`/api/batch-runs/${activeRun.batchId}/action`, {
          method: "POST",
          headers: { "Content-Type": "application/json" },
          body: JSON.stringify({ action })
        });
-    } catch {}
+    } catch {
+      // ignore
+    } finally {
+      setActionPending(null);
+    }
   };
 
   const getStatusClasses = (status: BatchItemRecord["status"]) => {
@@ -136,6 +161,11 @@ export function BatchProgressPanel({
     : null;
   const remainingSeconds =
     waitingUntil !== null ? Math.max(0, (waitingUntil - nowMs) / 1000) : null;
+  const failedItems = activeRun?.items.filter((item) => item.status === "FAILED") ?? [];
+  const canRetryAll =
+    failedItems.length > 0 &&
+    !!activeRun &&
+    !["RUNNING", "PAUSING", "STOPPING"].includes(activeRun.status);
 
   if (!activeRun) {
     return (
@@ -163,13 +193,31 @@ export function BatchProgressPanel({
            
            <div className="flex items-center gap-3">
               {activeRun.status === "RUNNING" && (
-                 <button onClick={() => handleAction("PAUSE")} className="rounded-xl border border-line px-4 py-2 text-sm font-medium hover:bg-surface-alt">Pause</button>
+                 <button
+                   onClick={() => handleAction("PAUSE")}
+                   disabled={actionPending !== null}
+                   className="rounded-xl border border-line px-4 py-2 text-sm font-medium hover:bg-surface-alt disabled:opacity-50"
+                 >
+                   {actionPending === "PAUSE" ? "Pausing..." : "Pause"}
+                 </button>
               )}
               {(activeRun.status === "PAUSED" || activeRun.status === "PAUSING") && (
-                 <button onClick={() => handleAction("RESUME")} className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover">Resume</button>
+                 <button
+                   onClick={() => handleAction("RESUME")}
+                   disabled={actionPending !== null}
+                   className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+                 >
+                   {actionPending === "RESUME" ? "Resuming..." : "Resume"}
+                 </button>
               )}
               {(activeRun.status === "RUNNING" || activeRun.status === "PAUSED" || activeRun.status === "PAUSING") && (
-                 <button onClick={() => handleAction("STOP")} className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100">Stop</button>
+                 <button
+                   onClick={() => handleAction("STOP")}
+                   disabled={actionPending !== null}
+                   className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                 >
+                   {actionPending === "STOP" ? "Stopping..." : "Stop"}
+                 </button>
               )}
 
               {(activeRun.status === "COMPLETED" || activeRun.status === "FAILED" || activeRun.status === "STOPPED") && (
@@ -207,6 +255,20 @@ export function BatchProgressPanel({
         {activeRun.status === "RUNNING" && remainingSeconds !== null ? (
           <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
             Next form starts in {remainingSeconds.toFixed(1)}s
+          </div>
+        ) : null}
+
+        {canRetryAll ? (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface-alt px-4 py-3 text-sm text-muted">
+            <span>{failedItems.length} failed rows</span>
+            <button
+              type="button"
+              onClick={() => handleRetryAll(failedItems.map((item) => item.foNumber))}
+              disabled={isRetryingAll}
+              className="rounded-xl border border-line px-4 py-2 text-sm font-medium hover:bg-surface-alt disabled:opacity-50"
+            >
+              {isRetryingAll ? "Retrying..." : "Retry All Failed"}
+            </button>
           </div>
         ) : null}
 

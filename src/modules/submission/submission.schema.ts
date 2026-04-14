@@ -76,14 +76,7 @@ export const baseSubmissionSchema = z
           ),
         "This Call Status is not supported yet"
       ),
-    omc: z
-      .string()
-      .trim()
-      .min(1, "OMC is required")
-      .refine(
-        (value) => OMC_OPTIONS.includes(value as (typeof OMC_OPTIONS)[number]),
-        "Select a valid OMC"
-      ),
+    omc: optionalStringSelect(OMC_OPTIONS, "Select a valid OMC"),
     noOfTrucks: z
       .string()
       .trim()
