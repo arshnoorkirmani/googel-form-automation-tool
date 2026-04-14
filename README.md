@@ -142,28 +142,47 @@ It does not migrate screenshots, logs, or other bulky artifacts.
 
 ## Render Deployment
 
-This repo is prepared to run on Render as a Docker web service because Playwright needs a predictable browser/runtime image.
+This repo deploys to Render as a **native Node.js web service** (not Docker).
+Playwright's Chromium is installed during the build step via `npx playwright install chromium`.
 
-### Files Added For Render
+### Dual-Branch Strategy
 
-- `Dockerfile`
-- `render.yaml`
-- `/api/health`
+| Branch | Storage | Auth session | Playwright browsers |
+|---|---|---|---|
+| `local-stable` | Local files | Local `.sessions/` | Local headful (GUI) |
+| `render-production` | **MongoDB** | **MongoDB** | Headless with `--no-sandbox` |
+
+### Files Used For Render
+
+- `render.yaml` — service definition (env, build/start commands, env vars)
+- `src/app/api/health/route.ts` — health check at `/api/health`
+- `docker/Dockerfile` — retained for future use (Docker/worker scenarios); **not the active Render path**
 
 ### Render Setup Steps
 
-1. Create or choose a MongoDB instance reachable from Render.
-2. Deploy this repository using the included `render.yaml` or create a Render Docker web service manually.
-3. Set the required environment variables:
-   - `MONGODB_URI`
-   - `MONGODB_DB_NAME`
+1. Connect this repository to Render as a **Node** web service.
+2. Render will use `render.yaml` automatically (or configure manually).
+   - **Build Command:** `npm install && npx playwright install chromium && npm run build`
+   - **Start Command:** `npm start`
+3. Set the required environment variables in Render Dashboard:
+   - `MONGODB_URI` — your Atlas or Render-hosted MongoDB connection string
+   - `MONGODB_DB_NAME` — e.g. `dispositions_form_automation`
+   - `APP_BASE_URL` — public URL of your Render service (e.g. `https://your-app.onrender.com`)
    - `AUTH_INTERACTIVE_SETUP_ENABLED=false`
-4. Keep file persistence disabled unless you explicitly need local debug artifacts:
-   - `PERSIST_LOG_FILES=false`
-   - `PERSIST_SCREENSHOTS=false`
-   - `PERSIST_RUN_REPORTS=false`
+4. File persistence is **automatically disabled** when `NODE_ENV=production` — no extra config needed.
 5. Use `/api/health` as the health check path.
-6. Bootstrap or refresh the Google session from a trusted local workstation that uses the same MongoDB connection.
+6. **Bootstrap the Google session locally first:**
+   - Run the app locally with `AUTH_INTERACTIVE_SETUP_ENABLED=true` and the same `MONGODB_URI`
+   - Use Settings → Login Setup to sign in
+   - The Playwright browser state is saved to MongoDB and will be reused by Render automatically
+
+### Production Safety Guarantees
+
+- `NODE_ENV=production` forces off all local file writes (logs, screenshots, reports) in code — not just by env vars
+- Local directory creation is skipped on Render
+- Playwright runs headless with `--no-sandbox --disable-setuid-sandbox` flags
+- Interactive browser setup is disabled
+- All MongoDB records are scoped by `operatorId` (user email) — per-user isolation enforced
 
 ## Build And Run Commands
 
@@ -203,7 +222,7 @@ src/
       artifacts/
       auth/
       batch-runs/
-      health/
+      health/          ← Render health check endpoint
       history/
       runs/
       storage/
@@ -217,9 +236,9 @@ src/
   modules/
   server/
     auth/
-    automation/
-    config/
-    database/
+    automation/        ← browser-factory.ts (Playwright, sandbox flags)
+    config/            ← config-service.ts (prod-safe persistence)
+    database/          ← mongodb.ts
     history/
     logging/
     reports/
@@ -229,6 +248,7 @@ config/
 scripts/
   migrate-local-storage-to-mongodb.ts
   prepare-storage.ts
-render.yaml
-Dockerfile
+docker/
+  Dockerfile           ← retained for Docker/worker use; not active
+render.yaml            ← native Node.js Render service config
 ```

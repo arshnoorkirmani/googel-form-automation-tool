@@ -1,8 +1,9 @@
 services:
   - type: web
     name: dispositions-form-automation
-    env: docker
-    dockerfilePath: ./Dockerfile
+    env: node
+    buildCommand: npm install && npx playwright install chromium && npm run build
+    startCommand: npm start
     plan: starter
     autoDeploy: true
     healthCheckPath: /api/health
@@ -13,6 +14,10 @@ services:
         value: Dispositions Form Automation
       - key: APP_FORM_URL
         value: https://docs.google.com/forms/d/e/1FAIpQLSeElvHr-D5FXndyGFdk5VrcNKprY_wakDRGlmNJytjInZRaUA/viewform
+      - key: PORT
+        value: "10000"
+      - key: APP_BASE_URL
+        sync: false
       - key: DEFAULT_MODE
         value: DRY_RUN
       - key: DEBUG_SLOW_MO_MS

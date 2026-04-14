@@ -35,7 +35,8 @@ class BrowserFactory {
 
     const browser = await chromium.launch({
       headless: !debug,
-      slowMo: debug ? config.debug.slowMoMs : 0
+      slowMo: debug ? config.debug.slowMoMs : 0,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"]
     });
 
     const context = await browser.newContext({

@@ -64,6 +64,7 @@ class ConfigService {
       return this.cache;
     }
 
+    const isProduction = process.env.NODE_ENV === "production";
     const configPath = path.resolve(process.cwd(), "config/app.config.json");
     const raw = await readFile(configPath, "utf8");
     const parsed = JSON.parse(raw) as RawAppConfig;
@@ -95,10 +96,12 @@ class ConfigService {
           process.env.MONGODB_DB_NAME?.trim() ||
           defaultDatabaseName(process.env.APP_NAME ?? parsed.appName)
       },
+      // Production safety: regardless of env var values, all local file
+      // persistence is forced off in production to handle Render's ephemeral FS.
       persistence: {
-        logFilesEnabled: readBooleanEnv("PERSIST_LOG_FILES", false),
-        screenshotsEnabled: readBooleanEnv("PERSIST_SCREENSHOTS", false),
-        runReportsEnabled: readBooleanEnv("PERSIST_RUN_REPORTS", false)
+        logFilesEnabled: isProduction ? false : readBooleanEnv("PERSIST_LOG_FILES", false),
+        screenshotsEnabled: isProduction ? false : readBooleanEnv("PERSIST_SCREENSHOTS", false),
+        runReportsEnabled: isProduction ? false : readBooleanEnv("PERSIST_RUN_REPORTS", false)
       },
       paths: {
         logsDir: toAbsolutePath(parsed.paths.logsDir),
@@ -107,7 +110,11 @@ class ConfigService {
       }
     };
 
-    await this.ensureRuntimeFiles(resolved);
+    // In production (Render), skip local directory creation — the filesystem
+    // is ephemeral and no critical data should be written there.
+    if (!isProduction) {
+      await this.ensureRuntimeFiles(resolved);
+    }
 
     this.cache = resolved;
     return resolved;

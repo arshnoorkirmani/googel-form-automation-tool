@@ -60,7 +60,8 @@ class AuthSetupManager {
 
     const browser = await chromium.launch({
       headless: false,
-      slowMo: 150
+      slowMo: 150,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"]
     });
     const context = await browser.newContext({
       viewport: {

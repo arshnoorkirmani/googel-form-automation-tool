@@ -86,7 +86,8 @@ class AuthService {
 
     const browser = await chromium.launch({
       headless: true,
-      slowMo: 0
+      slowMo: 0,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"]
     });
 
     const context = await browser.newContext({
