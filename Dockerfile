@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright:v1.51.0-noble AS deps
+FROM mcr.microsoft.com/playwright:v1.59.1-noble AS deps
 
 WORKDIR /app
 
@@ -12,7 +12,7 @@ WORKDIR /app
 COPY . .
 RUN npm run build
 
-FROM mcr.microsoft.com/playwright:v1.51.0-noble AS runner
+FROM mcr.microsoft.com/playwright:v1.59.1-noble AS runner
 
 WORKDIR /app
 
