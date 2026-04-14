@@ -35,6 +35,11 @@ class BatchStore {
   private readonly store =
     globalThis.__batchStore__ ?? (globalThis.__batchStore__ = new Map());
 
+  hydrate(record: BatchRunRecord): BatchRunRecord {
+    this.store.set(record.batchId, record);
+    return record;
+  }
+
   create(batchId: string, submission: BatchSubmissionPayload): BatchRunRecord {
     const record: BatchRunRecord = {
       batchId,

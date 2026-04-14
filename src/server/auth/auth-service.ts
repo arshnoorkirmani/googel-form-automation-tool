@@ -1,30 +1,16 @@
-import { access, readFile, writeFile } from "node:fs/promises";
-
 import { chromium } from "playwright";
 
+import { authSessionRepository } from "@/server/auth/auth-session-repository";
+import type {
+  AuthMetadata,
+  AuthStatus
+} from "@/server/auth/auth.types";
 import { configService } from "@/server/config/config-service";
 import { createLogger } from "@/server/logging/logger";
 import {
   sessionValidator,
   type SessionValidationResult
 } from "@/server/auth/session-validator";
-
-type AuthMetadata = {
-  state: "MISSING" | "VALID" | "REAUTH_REQUIRED" | "FORBIDDEN";
-  savedAt?: string;
-  lastValidatedAt?: string;
-  detectedEmail?: string;
-  reason?: string;
-};
-
-export type AuthStatus = {
-  state: AuthMetadata["state"] | "SETUP_IN_PROGRESS";
-  detectedEmail?: string;
-  savedAt?: string;
-  lastValidatedAt?: string;
-  reason?: string;
-  sessionFilePath: string;
-};
 
 export class ReAuthRequiredError extends Error {
   constructor(message: string) {
@@ -37,14 +23,15 @@ class AuthService {
   private readonly logger = createLogger("auth");
 
   async getStatus(validate = false): Promise<AuthStatus> {
-    const config = await configService.getConfig();
     const hasStateFile = await this.hasSavedSession();
+    const sessionStorageLocation =
+      await authSessionRepository.getStorageLocation();
 
     if (!hasStateFile) {
       return {
         state: "MISSING",
         reason: "No saved browser session was found.",
-        sessionFilePath: config.paths.storageState
+        sessionStorageLocation
       };
     }
 
@@ -57,7 +44,7 @@ class AuthService {
         savedAt: metadata?.savedAt,
         lastValidatedAt: metadata?.lastValidatedAt,
         reason: metadata?.reason,
-        sessionFilePath: config.paths.storageState
+        sessionStorageLocation
       };
     }
 
@@ -69,30 +56,32 @@ class AuthService {
       savedAt: metadata?.savedAt,
       lastValidatedAt: new Date().toISOString(),
       reason: result.reason,
-      sessionFilePath: config.paths.storageState
+      sessionStorageLocation
     };
   }
 
   async hasSavedSession(): Promise<boolean> {
-    const config = await configService.getConfig();
-
-    try {
-      await access(config.paths.storageState);
-      return true;
-    } catch {
-      return false;
-    }
+    return authSessionRepository.hasStorageState();
   }
 
   async validateSavedSession(): Promise<SessionValidationResult> {
     const config = await configService.getConfig();
+    const storageState = await authSessionRepository.getStorageState();
+
+    if (!storageState) {
+      return {
+        state: "REAUTH_REQUIRED",
+        reason: "No saved browser session was found."
+      };
+    }
+
     const browser = await chromium.launch({
       headless: true,
       slowMo: 0
     });
 
     const context = await browser.newContext({
-      storageState: config.paths.storageState,
+      storageState,
       viewport: {
         width: 1440,
         height: 900
@@ -108,7 +97,7 @@ class AuthService {
       });
 
       const result = await sessionValidator.validateFormAccess(page);
-      await this.writeMetadata({
+      await authSessionRepository.saveMetadata({
         state: result.state,
         savedAt: (await this.readMetadata())?.savedAt,
         lastValidatedAt: new Date().toISOString(),
@@ -134,27 +123,11 @@ class AuthService {
   }
 
   async saveMetadata(metadata: AuthMetadata): Promise<void> {
-    await this.writeMetadata(metadata);
+    await authSessionRepository.saveMetadata(metadata);
   }
 
   async readMetadata(): Promise<AuthMetadata | null> {
-    const config = await configService.getConfig();
-
-    try {
-      const raw = await readFile(config.paths.authMetadata, "utf8");
-      return JSON.parse(raw) as AuthMetadata;
-    } catch {
-      return null;
-    }
-  }
-
-  private async writeMetadata(metadata: AuthMetadata): Promise<void> {
-    const config = await configService.getConfig();
-    await writeFile(
-      config.paths.authMetadata,
-      JSON.stringify(metadata, null, 2),
-      "utf8"
-    );
+    return authSessionRepository.readMetadata();
   }
 }
 

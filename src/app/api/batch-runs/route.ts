@@ -5,6 +5,7 @@ import { batchSubmissionSchema } from "@/modules/submission/batch.schema";
 import { authService } from "@/server/auth/auth-service";
 import { authSetupManager } from "@/server/auth/auth-setup-manager";
 import { batchAutomationRunner } from "@/server/automation/batch-runner";
+import { batchHistoryRepository } from "@/server/runs/batch-history-repository";
 import { runQueue } from "@/server/runs/run-queue";
 import { batchStore } from "@/server/runs/batch-store";
 
@@ -39,6 +40,7 @@ export async function POST(request: Request) {
     const submission = batchSubmissionSchema.parse(payload);
     const batchId = createRunId();
     const batchRun = batchStore.create(batchId, submission);
+    await batchHistoryRepository.upsert(batchRun);
 
     runQueue.enqueue(async () => {
       try {

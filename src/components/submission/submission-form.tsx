@@ -26,7 +26,7 @@ import type {
   SubmissionFormValues,
   SubmissionSummaryItem
 } from "@/modules/submission/submission.types";
-import type { AuthStatus } from "@/server/auth/auth-service";
+import type { AuthStatus } from "@/server/auth/auth.types";
 import type { RunRecord } from "@/server/runs/run-types";
 
 function buildPreviewItems(values: SubmissionFormValues): SubmissionSummaryItem[] {

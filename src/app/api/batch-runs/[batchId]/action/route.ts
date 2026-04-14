@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+import { batchHistoryRepository } from "@/server/runs/batch-history-repository";
 import { batchStore } from "@/server/runs/batch-store";
 
 export const runtime = "nodejs";
@@ -13,7 +15,18 @@ export async function POST(
     const { batchId } = await params;
 
     if (!batchStore.get(batchId)) {
-      return NextResponse.json({ error: "Batch not found" }, { status: 404 });
+      const persisted = await batchHistoryRepository.getById(batchId);
+      if (!persisted) {
+        return NextResponse.json({ error: "Batch not found" }, { status: 404 });
+      }
+
+      return NextResponse.json(
+        {
+          error:
+            "Batch exists in persisted history, but it is not active in memory and cannot be controlled anymore."
+        },
+        { status: 409 }
+      );
     }
 
     let updatedRun;
@@ -31,6 +44,7 @@ export async function POST(
         return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
 
+    await batchHistoryRepository.upsert(updatedRun);
     return NextResponse.json({ batchRun: updatedRun }, { status: 200 });
   } catch (error) {
     return NextResponse.json(

@@ -1,0 +1,13 @@
+.git
+.gitignore
+.next
+node_modules
+dist
+out
+coverage
+storage/auth
+storage/history
+storage/logs
+storage/artifacts
+*.log
+*.tsbuildinfo

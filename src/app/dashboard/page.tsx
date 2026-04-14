@@ -5,9 +5,11 @@ import { RunSummaryCard } from "@/components/dashboard/run-summary-card";
 import { HistoryTable } from "@/components/history/history-table";
 import { authService } from "@/server/auth/auth-service";
 import { authSetupManager } from "@/server/auth/auth-setup-manager";
+import { configService } from "@/server/config/config-service";
 import { historyRepository } from "@/server/history/history-repository";
 
 export default async function DashboardPage() {
+  const config = await configService.getConfig();
   const history = await historyRepository.list();
   const successful = history.filter((run) => run.status === "SUCCEEDED").length;
   const failed = history.filter((run) => run.status === "FAILED").length;
@@ -32,7 +34,10 @@ export default async function DashboardPage() {
         <RunSummaryCard label="Failed Runs" value={String(failed)} tone="danger" />
       </div>
 
-      <AuthStatusCard initialStatus={initialStatus} />
+      <AuthStatusCard
+        initialStatus={initialStatus}
+        interactiveSetupEnabled={config.auth.interactiveSetupEnabled}
+      />
 
       <section className="space-y-4">
         <div>

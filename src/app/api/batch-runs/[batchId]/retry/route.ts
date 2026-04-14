@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { batchHistoryRepository } from "@/server/runs/batch-history-repository";
 import { batchStore } from "@/server/runs/batch-store";
 import { batchAutomationRunner } from "@/server/automation/batch-runner";
 import { runQueue } from "@/server/runs/run-queue";
@@ -12,10 +13,17 @@ export async function POST(
   { params }: { params: Promise<{ batchId: string }> }
 ) {
   const { batchId } = await params;
-  const batchRun = batchStore.get(batchId);
+  let batchRun = batchStore.get(batchId);
 
   if (!batchRun) {
-    return new NextResponse("Not Found", { status: 404 });
+    const persisted = await batchHistoryRepository.getById(batchId);
+    if (!persisted) {
+      return new NextResponse("Not Found", { status: 404 });
+    }
+
+    batchRun = batchStore.hydrate(
+      await batchHistoryRepository.recoverIfStale(persisted)
+    );
   }
 
   const payload = await request.json();
@@ -31,7 +39,8 @@ export async function POST(
   }
 
   // Set the batch run state back to running
-  batchStore.setBatchRunning(batchId);
+  const updatedBatchRun = batchStore.setBatchRunning(batchId);
+  await batchHistoryRepository.upsert(updatedBatchRun);
 
   runQueue.enqueue(async () => {
     try {

@@ -1,6 +1,7 @@
 import type { Browser, BrowserContext, Page } from "playwright";
 import { chromium } from "playwright";
 
+import { authSessionRepository } from "@/server/auth/auth-session-repository";
 import { authService } from "@/server/auth/auth-service";
 import { configService } from "@/server/config/config-service";
 import { createLogger } from "@/server/logging/logger";
@@ -30,6 +31,14 @@ class AuthSetupManager {
     message: string;
     formUrl: string;
   }> {
+    const config = await configService.getConfig();
+
+    if (!config.auth.interactiveSetupEnabled) {
+      throw new Error(
+        "Interactive login setup is disabled in this environment. Refresh the Google session from a trusted local workstation that uses the same MongoDB connection."
+      );
+    }
+
     const active = this.getActiveSession();
 
     if (active) {
@@ -37,11 +46,10 @@ class AuthSetupManager {
         startedAt: active.startedAt,
         message:
           "A manual login window is already open. Complete sign-in there, then click Finish Login Setup.",
-        formUrl: (await configService.getConfig()).formUrl
+        formUrl: config.formUrl
       };
     }
 
-    const config = await configService.getConfig();
     const browser = await chromium.launch({
       headless: false,
       slowMo: 150
@@ -95,7 +103,8 @@ class AuthSetupManager {
       throw new Error(result.reason);
     }
 
-    await active.context.storageState({ path: config.paths.storageState });
+    const storageState = await active.context.storageState();
+    await authSessionRepository.saveStorageState(storageState);
 
     const savedAt = new Date().toISOString();
     await authService.saveMetadata({

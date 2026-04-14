@@ -1,6 +1,6 @@
 import type { SubmissionPayload } from "@/modules/submission/submission.schema";
+import type { AuthStatus } from "@/server/auth/auth.types";
 import type { RunRecord } from "@/server/runs/run-types";
-import type { AuthStatus } from "@/server/auth/auth-service";
 
 async function requestJson<T>(
   input: string,

@@ -1,7 +1,7 @@
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { toAbsolutePath } from "@/lib/utils/path";
+import { sanitizeFileName, toAbsolutePath } from "@/lib/utils/path";
 import type { RunMode } from "@/modules/submission/submission.types";
 
 type RawAppConfig = {
@@ -15,23 +15,46 @@ type RawAppConfig = {
     slowMoMs: number;
   };
   paths: {
-    storageState: string;
-    authMetadata: string;
-    historyFile: string;
     logsDir: string;
     artifactsDir: string;
+    samplesDir: string;
   };
 };
 
 export type AppConfig = Omit<RawAppConfig, "paths"> & {
+  auth: {
+    interactiveSetupEnabled: boolean;
+    sessionKey: string;
+  };
+  mongodb: {
+    uri?: string;
+    dbName: string;
+  };
+  persistence: {
+    logFilesEnabled: boolean;
+    screenshotsEnabled: boolean;
+    runReportsEnabled: boolean;
+  };
   paths: {
-    storageState: string;
-    authMetadata: string;
-    historyFile: string;
     logsDir: string;
     artifactsDir: string;
+    samplesDir: string;
   };
 };
+
+function readBooleanEnv(name: string, fallback: boolean): boolean {
+  const raw = process.env[name];
+
+  if (raw === undefined) {
+    return fallback;
+  }
+
+  return ["1", "true", "yes", "on"].includes(raw.trim().toLowerCase());
+}
+
+function defaultDatabaseName(appName: string): string {
+  return sanitizeFileName(appName).replace(/-+/g, "_").toLowerCase();
+}
 
 class ConfigService {
   private cache: AppConfig | null = null;
@@ -47,22 +70,40 @@ class ConfigService {
 
     const resolved: AppConfig = {
       ...parsed,
+      appName: process.env.APP_NAME ?? parsed.appName,
       formUrl: process.env.APP_FORM_URL ?? parsed.formUrl,
       defaultMode:
         (process.env.DEFAULT_MODE as RunMode | undefined) ?? parsed.defaultMode,
       maxRetries: Number(process.env.MAX_RETRIES ?? parsed.maxRetries),
+      maxBatchRows: Number(process.env.MAX_BATCH_ROWS ?? parsed.maxBatchRows),
       debug: {
         enabled: parsed.debug.enabled,
         slowMoMs: Number(
           process.env.DEBUG_SLOW_MO_MS ?? parsed.debug.slowMoMs
         )
       },
+      auth: {
+        interactiveSetupEnabled: readBooleanEnv(
+          "AUTH_INTERACTIVE_SETUP_ENABLED",
+          process.env.NODE_ENV !== "production"
+        ),
+        sessionKey: process.env.AUTH_SESSION_KEY?.trim() || "default"
+      },
+      mongodb: {
+        uri: process.env.MONGODB_URI?.trim() || undefined,
+        dbName:
+          process.env.MONGODB_DB_NAME?.trim() ||
+          defaultDatabaseName(process.env.APP_NAME ?? parsed.appName)
+      },
+      persistence: {
+        logFilesEnabled: readBooleanEnv("PERSIST_LOG_FILES", false),
+        screenshotsEnabled: readBooleanEnv("PERSIST_SCREENSHOTS", false),
+        runReportsEnabled: readBooleanEnv("PERSIST_RUN_REPORTS", false)
+      },
       paths: {
-        storageState: toAbsolutePath(parsed.paths.storageState),
-        authMetadata: toAbsolutePath(parsed.paths.authMetadata),
-        historyFile: toAbsolutePath(parsed.paths.historyFile),
         logsDir: toAbsolutePath(parsed.paths.logsDir),
-        artifactsDir: toAbsolutePath(parsed.paths.artifactsDir)
+        artifactsDir: toAbsolutePath(parsed.paths.artifactsDir),
+        samplesDir: toAbsolutePath(parsed.paths.samplesDir)
       }
     };
 
@@ -79,25 +120,13 @@ class ConfigService {
 
   private async ensureRuntimeFiles(config: AppConfig): Promise<void> {
     const directories = [
-      path.dirname(config.paths.storageState),
-      path.dirname(config.paths.authMetadata),
-      path.dirname(config.paths.historyFile),
       config.paths.logsDir,
-      config.paths.artifactsDir
+      config.paths.artifactsDir,
+      config.paths.samplesDir
     ];
 
     for (const directory of directories) {
       await mkdir(directory, { recursive: true });
-    }
-
-    await this.ensureFile(config.paths.historyFile, "[]\n");
-  }
-
-  private async ensureFile(filePath: string, defaultContent: string) {
-    try {
-      await access(filePath);
-    } catch {
-      await writeFile(filePath, defaultContent, "utf8");
     }
   }
 }

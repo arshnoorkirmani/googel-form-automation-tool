@@ -18,7 +18,12 @@ class ArtifactService {
     page: Page,
     runId: string,
     name: string
-  ): Promise<string> {
+  ): Promise<string | undefined> {
+    const config = await configService.getConfig();
+    if (!config.persistence.screenshotsEnabled) {
+      return undefined;
+    }
+
     const runDirectory = await this.ensureRunDirectory(runId);
     const filePath = path.join(
       runDirectory,
@@ -33,7 +38,12 @@ class ArtifactService {
     runId: string,
     name: string,
     payload: unknown
-  ): Promise<string> {
+  ): Promise<string | undefined> {
+    const config = await configService.getConfig();
+    if (!config.persistence.runReportsEnabled) {
+      return undefined;
+    }
+
     const runDirectory = await this.ensureRunDirectory(runId);
     const filePath = path.join(runDirectory, `${sanitizeFileName(name)}.json`);
     await writeFile(filePath, JSON.stringify(payload, null, 2), "utf8");

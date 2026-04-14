@@ -30,8 +30,13 @@ export class StructuredLogger {
     await this.write("ERROR", event, context);
   }
 
-  async getLogFilePath(): Promise<string> {
+  async getLogFilePath(): Promise<string | undefined> {
     const config = await configService.getConfig();
+
+    if (!config.persistence.logFilesEnabled) {
+      return undefined;
+    }
+
     const fileName = this.runId
       ? `${this.runId}.jsonl`
       : `${new Date().toISOString().slice(0, 10)}.jsonl`;
@@ -55,7 +60,10 @@ export class StructuredLogger {
     const serialized = `${JSON.stringify(entry)}\n`;
     const logFilePath = await this.getLogFilePath();
 
-    await appendFile(logFilePath, serialized, "utf8");
+    if (logFilePath) {
+      await appendFile(logFilePath, serialized, "utf8");
+    }
+
     process.stdout.write(serialized);
   }
 }

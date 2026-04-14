@@ -12,7 +12,8 @@ import { withRetries } from "@/server/automation/retry";
 import { configService } from "@/server/config/config-service";
 import { createLogger } from "@/server/logging/logger";
 import { artifactService } from "@/server/reports/artifact-service";
-import { batchStore } from "@/server/runs/batch-store";
+import { batchHistoryRepository } from "@/server/runs/batch-history-repository";
+import { batchStore, type BatchRunRecord } from "@/server/runs/batch-store";
 import { waitForFormReady } from "./form/form-helpers";
 
 const RANDOM_UNSUPPORTED_OPTIONS = [
@@ -34,7 +35,7 @@ class BatchAutomationRunner {
     let session: BrowserSession | null = null;
     let page: Page | null = null;
 
-    batchStore.setBatchRunning(batchId);
+    await this.persistCurrentBatch(batchStore.setBatchRunning(batchId));
 
     try {
       await authService.assertValidSession();
@@ -70,13 +71,13 @@ class BatchAutomationRunner {
           if (!rec) break;
           
           if (rec.status === "STOPPING" || rec.status === "STOPPED") {
-            batchStore.setBatchStopped(batchId);
+            await this.persistCurrentBatch(batchStore.setBatchStopped(batchId));
             return; // Will gracefully trigger the finally block to close the browser
           }
           
           if (rec.status === "PAUSING" || rec.status === "PAUSED") {
             if (rec.status === "PAUSING") {
-              batchStore.setBatchPaused(batchId);
+              await this.persistCurrentBatch(batchStore.setBatchPaused(batchId));
             }
             await new Promise(r => setTimeout(r, 1000));
           } else {
@@ -90,7 +91,9 @@ class BatchAutomationRunner {
           currentCallStatus = getRandomUnsupported();
         }
 
-        batchStore.setItemRunning(batchId, foNumber, currentCallStatus);
+        await this.persistCurrentBatch(
+          batchStore.setItemRunning(batchId, foNumber, currentCallStatus)
+        );
 
         try {
           await ensurePage();
@@ -123,12 +126,14 @@ class BatchAutomationRunner {
             `success-${foNumber}`
           );
 
-          batchStore.setItemSucceeded(
-            batchId,
-            foNumber,
-            remarksResult.confirmationMessage,
-            screenshotPath,
-            currentCallStatus
+          await this.persistCurrentBatch(
+            batchStore.setItemSucceeded(
+              batchId,
+              foNumber,
+              remarksResult.confirmationMessage,
+              screenshotPath,
+              currentCallStatus
+            )
           );
 
           // Use user-configured delay directly (seconds → ms), fallback to 10s
@@ -158,17 +163,19 @@ class BatchAutomationRunner {
 
         } catch (itemError) {
           const itemErrorMessage = itemError instanceof Error ? itemError.message : "Unknown item error";
-          let itemScreenshotPath;
+          let itemScreenshotPath: string | undefined;
           try {
              itemScreenshotPath = await artifactService.captureScreenshot(page, batchId, `error-${foNumber}`);
           } catch(e) {}
 
-          batchStore.setItemFailed(
-            batchId,
-            foNumber,
-            itemErrorMessage,
-            itemScreenshotPath,
-            currentCallStatus
+          await this.persistCurrentBatch(
+            batchStore.setItemFailed(
+              batchId,
+              foNumber,
+              itemErrorMessage,
+              itemScreenshotPath,
+              currentCallStatus
+            )
           );
 
           // If an item failed, it is likely the form state is tangled.
@@ -189,12 +196,12 @@ class BatchAutomationRunner {
         }
       }
 
-      batchStore.setBatchCompleted(batchId);
+      await this.persistCurrentBatch(batchStore.setBatchCompleted(batchId));
       await logger.info("batch.completed", { batchId });
 
     } catch (batchError) {
       const errorMessage = batchError instanceof Error ? batchError.message : "Fail to run batch.";
-      batchStore.setBatchFailed(batchId, errorMessage);
+      await this.persistCurrentBatch(batchStore.setBatchFailed(batchId, errorMessage));
       await logger.error("batch.failed", { error: errorMessage });
     } finally {
       if (session) {
@@ -230,7 +237,7 @@ class BatchAutomationRunner {
       }
 
       if (record.status === "STOPPING" || record.status === "STOPPED") {
-        batchStore.setBatchStopped(batchId);
+        await this.persistCurrentBatch(batchStore.setBatchStopped(batchId));
         return;
       }
 
@@ -258,6 +265,10 @@ class BatchAutomationRunner {
     }
 
     batchStore.clearWaiting(batchId);
+  }
+
+  private async persistCurrentBatch(record: BatchRunRecord): Promise<void> {
+    await batchHistoryRepository.upsert(record);
   }
 }
 

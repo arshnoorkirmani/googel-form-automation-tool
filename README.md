@@ -1,101 +1,89 @@
 # Dispositions Form Automation
 
-Windows-local internal automation tool for Blackbuck to automate a restricted Google Form with a professional dashboard, saved session reuse, dry-run-first safety, structured logs, screenshots on failure, and a future-ready architecture for batch processing.
+Production-style Next.js + Playwright automation for the restricted Google Form, now prepared for Render deployment with MongoDB-backed persistence and lean-by-default local storage.
 
-## What This Project Does
+## What Changed
 
-- Runs locally on Windows only.
-- Uses a single Next.js + TypeScript app for both UI and server-side automation APIs.
-- Reuses a manually created Playwright browser session instead of storing credentials.
-- Defaults every run to `DRY_RUN`.
-- Supports `SUBMIT` mode for real submissions.
-- Handles the supported multi-page Google Form branches:
-  - Interested
-  - Follow Up
-  - Call Back
-  - Not Interested
-  - Call Disconnected
-  - Call Drop
-  - Not Connected
-  - Language Barrier
-- Persists:
+- Main operational persistence moved to MongoDB:
   - auth session metadata
-  - run history
-  - structured logs
-  - screenshots and JSON run reports
+  - saved Playwright browser state
+  - single-run history
+  - batch run summaries
+  - batch row-level results
+- Runtime-only state stays in memory:
+  - active run progress
+  - active batch queue execution
+  - pause/resume timers
+  - in-progress auth setup browser handles
+- Local file persistence is now optional and disabled by default for:
+  - screenshots
+  - JSON run reports
+  - JSONL file logs
+- Render deployment is supported through `Dockerfile`, `render.yaml`, `/api/health`, and environment-based config.
+
+## Current Storage Strategy
+
+### Must Move To MongoDB
+
+- Saved Playwright session state used for browser reuse
+- Auth/session metadata used by the dashboard and validation flow
+- Submission history
+- Batch summaries
+- Batch row results
+
+### Remains Ephemeral / Runtime-Only
+
+- In-memory live run store
+- In-memory batch queue and wait countdowns
+- Active Playwright browser/context/page instances
+- Active login setup session window
+
+### No Longer Stored By Default
+
+- Screenshots
+- JSON run reports
+- JSONL log files
+- Legacy local auth/history JSON files
 
 ## High-Level Architecture
 
 ```text
 Next.js App Router UI
-  -> Dashboard / New Submission / Batch / History / Settings
-  -> API routes for auth, runs, history, config
+  -> Dashboard / New Submission / Batch / History / Settings / Data Management
+  -> API routes for auth, runs, history, batch control, storage, health
 
 Server Modules
   -> Auth service + manual login setup manager
-  -> Session validator for expiry / access loss detection
-  -> Playwright automation runner
-  -> Branch-specific form handlers
-  -> Run queue + in-memory live run store
-  -> JSON history repository
-  -> Structured logger + artifact service
+  -> Session validator for restricted-form access
+  -> Playwright automation runners
+  -> In-memory live run stores for active execution
+  -> MongoDB repositories for auth/session, runs, and batches
+  -> Structured logger + optional artifact writer
 
-Local Storage
-  -> storage/auth
-  -> storage/history
+Optional Local Storage
   -> storage/logs
   -> storage/artifacts
   -> storage/samples
 ```
 
-## Project Structure
+## Environment Variables
 
-```text
-src/
-  app/
-    dashboard/
-    submissions/new/
-    batch/
-    history/
-    settings/
-    api/
-  components/
-    dashboard/
-    submission/
-    history/
-    shared/
-  modules/
-    submission/
-    batch/
-  server/
-    auth/
-    automation/
-    config/
-    history/
-    logging/
-    reports/
-    runs/
-storage/
-  auth/
-  history/
-  logs/
-  artifacts/
-  samples/
-config/
-  app.config.json
-tests/
-scripts/
-```
+Copy `.env.example` to `.env` for local work.
 
-## Prerequisites
+Required:
 
-- Windows machine
-- Node.js 20+
-- npm 10+
-- An authorized `@blackbuck.com` Google account
-- Local browser access for the one-time manual login setup
+- `MONGODB_URI`
+- `MONGODB_DB_NAME`
 
-## Setup
+Important:
+
+- `AUTH_INTERACTIVE_SETUP_ENABLED=true` only on a trusted local workstation used for manual session refresh
+- `AUTH_INTERACTIVE_SETUP_ENABLED=false` on Render
+- `PERSIST_LOG_FILES=false`
+- `PERSIST_SCREENSHOTS=false`
+- `PERSIST_RUN_REPORTS=false`
+
+## Local Development
 
 1. Copy `.env.example` to `.env`.
 2. Install dependencies:
@@ -104,189 +92,143 @@ scripts/
    npm install
    ```
 
-3. Install Playwright Chromium if needed:
-
-   ```bash
-   npx playwright install chromium
-   ```
-
-4. Prepare local storage:
+3. Prepare optional local directories:
 
    ```bash
    npm run prepare:storage
    ```
 
-5. Start the app:
+4. Start the app:
 
    ```bash
    npm run dev
    ```
 
-6. Open:
+5. Open `http://localhost:3000`.
 
-   ```text
-   http://localhost:3000
-   ```
+## Auth Session Strategy
 
-## Main Commands
+The app still does not store credentials and still relies on a manually created Google session.
+
+### Local / Trusted Workstation
+
+- Keep `AUTH_INTERACTIVE_SETUP_ENABLED=true`
+- Use the Settings or Dashboard auth actions
+- The resulting Playwright storage state is saved to MongoDB instead of `storage/auth/storage-state.json`
+
+### Render / Cloud Runtime
+
+- Keep `AUTH_INTERACTIVE_SETUP_ENABLED=false`
+- Do not attempt interactive login inside the Render container
+- Refresh the session from a trusted local workstation that points to the same MongoDB instance
+
+This keeps the current login model intact while avoiding unsafe or brittle cloud-only sign-in shortcuts.
+
+## Migrating Legacy Local Data
+
+If you already have local auth/history data from the previous file-based version, import it once into MongoDB:
+
+```bash
+npm run migrate:mongodb
+```
+
+The migration script imports:
+
+- `storage/history/runs.json`
+- `storage/auth/auth-metadata.json`
+- `storage/auth/storage-state.json`
+
+It does not migrate screenshots, logs, or other bulky artifacts.
+
+## Render Deployment
+
+This repo is prepared to run on Render as a Docker web service because Playwright needs a predictable browser/runtime image.
+
+### Files Added For Render
+
+- `Dockerfile`
+- `render.yaml`
+- `/api/health`
+
+### Render Setup Steps
+
+1. Create or choose a MongoDB instance reachable from Render.
+2. Deploy this repository using the included `render.yaml` or create a Render Docker web service manually.
+3. Set the required environment variables:
+   - `MONGODB_URI`
+   - `MONGODB_DB_NAME`
+   - `AUTH_INTERACTIVE_SETUP_ENABLED=false`
+4. Keep file persistence disabled unless you explicitly need local debug artifacts:
+   - `PERSIST_LOG_FILES=false`
+   - `PERSIST_SCREENSHOTS=false`
+   - `PERSIST_RUN_REPORTS=false`
+5. Use `/api/health` as the health check path.
+6. Bootstrap or refresh the Google session from a trusted local workstation that uses the same MongoDB connection.
+
+## Build And Run Commands
 
 ```bash
 npm run dev
 npm run build
 npm run start
 npm run typecheck
-npm run test
-npm run prepare:storage
-npm run seed:sample
+npm test
+npm run migrate:mongodb
 ```
 
-## Manual Operator Steps
+## Validation
 
-### One-Time Login Setup
+Automated checks used during this branch work:
 
-1. Open the app and go to `Settings` or `Dashboard`.
-2. Click `Start Login Setup`.
-3. A browser window opens to the restricted Google Form.
-4. Manually sign in using the authorized `@blackbuck.com` account.
-5. Confirm the form loads fully.
-6. Return to the app and click `Finish Login Setup`.
-7. The app saves Playwright `storageState` locally for later reuse.
+- `npm run typecheck`
+- `npm test`
+- `npm run build`
 
-### Run a Submission
+If interactive auth is disabled or MongoDB is missing, persistence-backed routes will fail fast instead of silently falling back to local JSON.
 
-1. Open `New Submission`.
-2. Fill Page 1 common fields.
-3. Pick one supported Call Status.
-4. Fill the branch-specific Page 2 fields.
-5. Fill Page 3 `Remarks`.
-6. Keep `Dry Run` unless you explicitly want a real submission.
-7. Click `Preview Submission`.
-8. Confirm the preview.
-9. Watch the live progress panel.
+## Notes On Optional Artifacts
 
-## Session Expiry and Re-Auth
+- Logs always go to stdout for platform logging
+- File logs are optional
+- Screenshots are optional
+- JSON run reports are optional
+- Artifact file serving is available through `/api/artifacts/...` when local artifact persistence is enabled
 
-The tool never stores credentials and never bypasses Google login.
+## Project Structure
 
-If the saved session expires or loses access:
-
-- the run is blocked safely
-- the UI shows that re-auth is required
-- the operator should repeat the login setup flow
-
-### Refresh Auth Safely
-
-1. Click `Refresh Status`.
-2. If status becomes `REAUTH_REQUIRED` or `FORBIDDEN`, click `Start Login Setup`.
-3. Sign in manually again with the authorized account.
-4. Click `Finish Login Setup`.
-
-## Validation and Safety Notes
-
-- Default mode is `DRY_RUN`.
-- Unsupported call statuses are intentionally blocked in the MVP.
-- Hidden branch fields are cleared when Call Status changes.
-- Browser automation relies on labels, roles, and visible text instead of brittle CSS-only selectors.
-- Submit mode does not auto-retry the final submit click to reduce duplicate submission risk.
-- Screenshots are captured on failure and also at the end of successful runs.
-
-## Local Data Layout
-
-- `storage/auth/storage-state.json`
-  - saved Playwright session
-- `storage/auth/auth-metadata.json`
-  - last saved / validated session metadata
-- `storage/history/runs.json`
-  - completed run history
-- `storage/logs/*.jsonl`
-  - structured logs
-- `storage/artifacts/<run-id>/`
-  - screenshots and JSON reports
-
-## Testing Guide
-
-Run the automated checks:
-
-```bash
-npm run typecheck
-npm run test
+```text
+src/
+  app/
+    api/
+      artifacts/
+      auth/
+      batch-runs/
+      health/
+      history/
+      runs/
+      storage/
+    batch/
+    dashboard/
+    history/
+    settings/
+    submissions/
+  components/
+  lib/
+  modules/
+  server/
+    auth/
+    automation/
+    config/
+    database/
+    history/
+    logging/
+    reports/
+    runs/
+config/
+  app.config.json
+scripts/
+  migrate-local-storage-to-mongodb.ts
+  prepare-storage.ts
+render.yaml
+Dockerfile
 ```
-
-Covered checks include:
-
-- submission schema validation
-- date/time utilities
-- run store transitions
-- session signal interpretation
-
-### Manual Verification Checklist
-
-1. Start the app locally.
-2. Confirm `Dashboard`, `New Submission`, `Batch Upload`, `History`, and `Settings` load.
-3. Confirm `Data Management` loads and shows storage summary.
-3. Run login setup once with the authorized account.
-4. Execute one `DRY_RUN` per supported branch:
-   - Interested
-   - Follow Up
-   - Call Back
-   - Not Interested
-   - Call Disconnected
-   - Call Drop
-   - Not Connected
-   - Language Barrier
-5. Confirm progress updates appear in the side panel.
-6. Confirm `History` shows the completed run.
-7. Confirm logs and screenshot artifacts are saved locally.
-8. Test a forced expired-session scenario by removing the saved session or signing out, then verify the app asks for re-auth.
-
-## Supported MVP Branches
-
-- Interested
-- Follow Up
-- Call Back
-- Not Interested
-- Call Disconnected
-- Call Drop
-- Not Connected
-- Language Barrier
-
-## Not Yet Enabled
-
-- Google Sheet ingestion
-- Full batch execution UI
-- Multi-operator concurrency controls
-- Artifact preview inside the dashboard
-
-## Future Extension Notes
-
-### Google Sheet Support
-
-The architecture already separates:
-
-- submission schema
-- run queue
-- history persistence
-- batch module contracts
-
-This makes it straightforward to add:
-
-- Google Sheet row ingestion
-- row-level validation
-- continue-on-error execution summaries
-- downloadable batch reports
-
-### Batch Processing
-
-Planned batch behavior:
-
-- max target rows: 50
-- strategy: continue on error
-- reuse the same automation runner per row
-- persist row-level result history and artifacts
-
-## Important Compliance Notes
-
-- Use only an authorized `@blackbuck.com` account.
-- Do not hardcode credentials.
-- Do not attempt to automate sign-in fields or bypass the restricted form.
-- Keep the app local and internal only.

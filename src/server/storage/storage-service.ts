@@ -1,20 +1,29 @@
-import { access, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 
+import { authSessionRepository } from "@/server/auth/auth-session-repository";
 import { configService } from "@/server/config/config-service";
+import { historyRepository } from "@/server/history/history-repository";
+import { batchHistoryRepository } from "@/server/runs/batch-history-repository";
 import { batchStore } from "@/server/runs/batch-store";
 
 type StorageSummary = {
   historyEntries: number;
-  historyFilePresent: boolean;
+  historyStore: "MONGODB";
   logFiles: number;
+  logPersistenceEnabled: boolean;
   artifactFiles: number;
   artifactRuns: number;
+  artifactPersistenceEnabled: boolean;
+  screenshotPersistenceEnabled: boolean;
+  reportPersistenceEnabled: boolean;
   sampleFiles: number;
   authSessionPresent: boolean;
   authMetadataPresent: boolean;
+  authStore: "MONGODB";
   configPresent: boolean;
   batchRunsInMemory: number;
+  batchRunsPersisted: number;
   batchHasActiveRun: boolean;
 };
 
@@ -108,15 +117,10 @@ async function clearDirectory(
 class StorageService {
   async getSummary(): Promise<StorageSummary> {
     const config = await configService.getConfig();
-    const historyFilePresent = await exists(config.paths.historyFile);
     const logsDir = config.paths.logsDir;
     const artifactsDir = config.paths.artifactsDir;
-    const samplesDir = path.resolve(process.cwd(), "storage", "samples");
+    const samplesDir = config.paths.samplesDir;
     const configPath = path.resolve(process.cwd(), "config", "app.config.json");
-
-    const historyEntries = historyFilePresent
-      ? await this.countHistoryEntries(config.paths.historyFile)
-      : 0;
 
     const logFiles = await countFiles(logsDir, {
       excludeNames: [".gitkeep"]
@@ -136,28 +140,36 @@ class StorageService {
     const batchHasActiveRun = batchRuns.some((run) =>
       ["RUNNING", "PAUSING", "PAUSED", "STOPPING"].includes(run.status)
     );
+    const authMetadata = await authSessionRepository.readMetadata();
 
     return {
-      historyEntries,
-      historyFilePresent,
+      historyEntries: await historyRepository.count(),
+      historyStore: "MONGODB",
       logFiles,
+      logPersistenceEnabled: config.persistence.logFilesEnabled,
       artifactFiles,
       artifactRuns,
+      artifactPersistenceEnabled:
+        config.persistence.screenshotsEnabled || config.persistence.runReportsEnabled,
+      screenshotPersistenceEnabled: config.persistence.screenshotsEnabled,
+      reportPersistenceEnabled: config.persistence.runReportsEnabled,
       sampleFiles,
-      authSessionPresent: await exists(config.paths.storageState),
-      authMetadataPresent: await exists(config.paths.authMetadata),
+      authSessionPresent: await authSessionRepository.hasStorageState(),
+      authMetadataPresent: authMetadata !== null,
+      authStore: "MONGODB",
       configPresent: await exists(configPath),
       batchRunsInMemory: batchRuns.length,
+      batchRunsPersisted: await batchHistoryRepository.count(),
       batchHasActiveRun
     };
   }
 
   async clear(action: ClearAction): Promise<void> {
     const config = await configService.getConfig();
-    const samplesDir = path.resolve(process.cwd(), "storage", "samples");
+    const samplesDir = config.paths.samplesDir;
 
     if (action === "CLEAR_HISTORY" || action === "CLEAR_NON_AUTH") {
-      await writeFile(config.paths.historyFile, "[]\n", "utf8");
+      await historyRepository.clear();
     }
 
     if (action === "CLEAR_LOGS" || action === "CLEAR_NON_AUTH") {
@@ -181,21 +193,11 @@ class StorageService {
         throw new Error("Stop all active batch runs before clearing batch data.");
       }
       batchStore.clearAll();
+      await batchHistoryRepository.clear();
     }
 
     if (action === "CLEAR_AUTH") {
-      await rm(config.paths.storageState, { force: true });
-      await rm(config.paths.authMetadata, { force: true });
-    }
-  }
-
-  private async countHistoryEntries(historyFile: string): Promise<number> {
-    try {
-      const raw = await readFile(historyFile, "utf8");
-      const parsed = JSON.parse(raw) as unknown[];
-      return Array.isArray(parsed) ? parsed.length : 0;
-    } catch {
-      return 0;
+      await authSessionRepository.clear();
     }
   }
 }

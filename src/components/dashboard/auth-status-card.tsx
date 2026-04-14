@@ -4,13 +4,17 @@ import { useState, useTransition } from "react";
 
 import { apiClient } from "@/lib/api/client";
 import { StatusBadge } from "@/components/shared/status-badge";
-import type { AuthStatus } from "@/server/auth/auth-service";
+import type { AuthStatus } from "@/server/auth/auth.types";
 
 type AuthStatusCardProps = {
   initialStatus: AuthStatus;
+  interactiveSetupEnabled: boolean;
 };
 
-export function AuthStatusCard({ initialStatus }: AuthStatusCardProps) {
+export function AuthStatusCard({
+  initialStatus,
+  interactiveSetupEnabled
+}: AuthStatusCardProps) {
   const [status, setStatus] = useState(initialStatus);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -89,9 +93,9 @@ export function AuthStatusCard({ initialStatus }: AuthStatusCardProps) {
 
       <div className="mt-5 space-y-2 text-sm text-muted">
         <p>
-          Saved session file:
+          Session storage:
           <span className="ml-2 font-mono text-xs text-text">
-            {status.sessionFilePath}
+            {status.sessionStorageLocation}
           </span>
         </p>
         {status.detectedEmail ? (
@@ -107,6 +111,13 @@ export function AuthStatusCard({ initialStatus }: AuthStatusCardProps) {
           </p>
         ) : null}
         {status.reason ? <p>{status.reason}</p> : null}
+        {!interactiveSetupEnabled ? (
+          <p>
+            Interactive login setup is disabled here. Refresh or bootstrap the
+            session from a trusted local workstation that uses the same MongoDB
+            connection.
+          </p>
+        ) : null}
       </div>
 
       <div className="mt-6 flex flex-wrap gap-3">
@@ -122,7 +133,7 @@ export function AuthStatusCard({ initialStatus }: AuthStatusCardProps) {
           type="button"
           onClick={startSetup}
           className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white"
-          disabled={isPending}
+          disabled={isPending || !interactiveSetupEnabled}
         >
           Start Login Setup
         </button>
@@ -130,7 +141,7 @@ export function AuthStatusCard({ initialStatus }: AuthStatusCardProps) {
           type="button"
           onClick={completeSetup}
           className="rounded-xl border border-line bg-white px-4 py-2 text-sm font-medium text-text"
-          disabled={isPending}
+          disabled={isPending || !interactiveSetupEnabled}
         >
           Finish Login Setup
         </button>
@@ -138,7 +149,7 @@ export function AuthStatusCard({ initialStatus }: AuthStatusCardProps) {
           type="button"
           onClick={cancelSetup}
           className="rounded-xl border border-line bg-white px-4 py-2 text-sm font-medium text-text"
-          disabled={isPending}
+          disabled={isPending || !interactiveSetupEnabled}
         >
           Cancel
         </button>

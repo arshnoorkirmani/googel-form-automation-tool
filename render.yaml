@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: dispositions-form-automation
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    autoDeploy: true
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_FORM_URL
+        value: https://docs.google.com/forms/d/e/1FAIpQLSeElvHr-D5FXndyGFdk5VrcNKprY_wakDRGlmNJytjInZRaUA/viewform
+      - key: DEFAULT_MODE
+        value: DRY_RUN
+      - key: MAX_RETRIES
+        value: "2"
+      - key: MAX_BATCH_ROWS
+        value: "50"
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB_NAME
+        value: dispositions_form_automation
+      - key: AUTH_SESSION_KEY
+        value: default
+      - key: AUTH_INTERACTIVE_SETUP_ENABLED
+        value: "false"
+      - key: PERSIST_LOG_FILES
+        value: "false"
+      - key: PERSIST_SCREENSHOTS
+        value: "false"
+      - key: PERSIST_RUN_REPORTS
+        value: "false"

@@ -1,5 +1,6 @@
 import { chromium, type Browser, type BrowserContext } from "playwright";
 
+import { authSessionRepository } from "@/server/auth/auth-session-repository";
 import { configService } from "@/server/config/config-service";
 
 export type BrowserSessionOptions = {
@@ -18,6 +19,15 @@ class BrowserFactory {
   ): Promise<BrowserSession> {
     const config = await configService.getConfig();
     const debug = options.debug ?? false;
+    const persistedStorageState = options.useSavedSession
+      ? await authSessionRepository.getStorageState()
+      : undefined;
+
+    if (options.useSavedSession && !persistedStorageState) {
+      throw new Error("No saved browser session is available in MongoDB.");
+    }
+
+    const storageState = persistedStorageState ?? undefined;
 
     const browser = await chromium.launch({
       headless: !debug,
@@ -29,7 +39,7 @@ class BrowserFactory {
         width: 1440,
         height: 900
       },
-      storageState: options.useSavedSession ? config.paths.storageState : undefined
+      storageState
     });
 
     return {

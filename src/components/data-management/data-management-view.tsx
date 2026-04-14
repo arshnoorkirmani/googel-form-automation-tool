@@ -4,15 +4,21 @@ import { useEffect, useState } from "react";
 
 type StorageSummary = {
   historyEntries: number;
-  historyFilePresent: boolean;
+  historyStore: "MONGODB";
   logFiles: number;
+  logPersistenceEnabled: boolean;
   artifactFiles: number;
   artifactRuns: number;
+  artifactPersistenceEnabled: boolean;
+  screenshotPersistenceEnabled: boolean;
+  reportPersistenceEnabled: boolean;
   sampleFiles: number;
   authSessionPresent: boolean;
   authMetadataPresent: boolean;
+  authStore: "MONGODB";
   configPresent: boolean;
   batchRunsInMemory: number;
+  batchRunsPersisted: number;
   batchHasActiveRun: boolean;
 };
 
@@ -127,7 +133,7 @@ export function DataManagementView() {
         <div className="rounded-2xl border border-line bg-surface p-5 shadow-panel">
           <h3 className="text-lg font-semibold text-text">Run History</h3>
           <p className="mt-1 text-sm text-muted">
-            {summary.historyEntries} entries in storage/history/runs.json
+            {summary.historyEntries} entries in {summary.historyStore.toLowerCase()}
           </p>
           <button
             type="button"
@@ -142,7 +148,12 @@ export function DataManagementView() {
         <div className="rounded-2xl border border-line bg-surface p-5 shadow-panel">
           <h3 className="text-lg font-semibold text-text">Logs</h3>
           <p className="mt-1 text-sm text-muted">
-            {summary.logFiles} log files in storage/logs
+            {summary.logFiles} file logs in storage/logs
+          </p>
+          <p className="mt-2 text-xs text-muted">
+            {summary.logPersistenceEnabled
+              ? "File logging is enabled in addition to stdout."
+              : "File logging is disabled; Render/runtime logs stay in stdout only."}
           </p>
           <button
             type="button"
@@ -160,6 +171,11 @@ export function DataManagementView() {
             {summary.artifactFiles} files across {summary.artifactRuns} runs in
             storage/artifacts
           </p>
+          <p className="mt-2 text-xs text-muted">
+            {summary.artifactPersistenceEnabled
+              ? `Screenshots: ${summary.screenshotPersistenceEnabled ? "on" : "off"}, JSON reports: ${summary.reportPersistenceEnabled ? "on" : "off"}`
+              : "Artifact persistence is disabled by default."}
+          </p>
           <button
             type="button"
             onClick={() => runClear("CLEAR_ARTIFACTS")}
@@ -171,9 +187,9 @@ export function DataManagementView() {
         </div>
 
         <div className="rounded-2xl border border-line bg-surface p-5 shadow-panel">
-          <h3 className="text-lg font-semibold text-text">Batch Memory</h3>
+          <h3 className="text-lg font-semibold text-text">Batch State</h3>
           <p className="mt-1 text-sm text-muted">
-            {summary.batchRunsInMemory} batch runs in memory
+            {summary.batchRunsInMemory} active/in-memory batches, {summary.batchRunsPersisted} persisted in MongoDB
           </p>
           {summary.batchHasActiveRun ? (
             <p className="mt-2 text-xs text-amber-700">
@@ -210,8 +226,9 @@ export function DataManagementView() {
           <p className="mt-1 text-sm text-muted">
             {summary.authSessionPresent
               ? "Saved session detected."
-              : "No session file found."}{" "}
-            {summary.authMetadataPresent ? "Metadata present." : "No metadata."}
+              : "No session state found."}{" "}
+            {summary.authMetadataPresent ? "Metadata present." : "No metadata."}{" "}
+            Stored in {summary.authStore.toLowerCase()}.
           </p>
           <button
             type="button"
@@ -247,8 +264,9 @@ export function DataManagementView() {
       </div>
 
       <div className="rounded-2xl border border-line bg-surface-alt p-4 text-xs text-muted">
-        App settings are stored in config/app.config.json. Edit the file directly
-        if you need to update defaults.
+        Deployment-sensitive settings now come from environment variables.
+        `config/app.config.json` only provides default values for local/runtime
+        behavior.
       </div>
     </div>
   );
