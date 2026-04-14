@@ -41,9 +41,9 @@ class AuthSetupManager {
   }> {
     const config = await configService.getConfig();
 
-    if (!config.auth.interactiveSetupEnabled) {
+    if (!config.auth.interactiveSetupEnabled || process.env.NODE_ENV === "production" || process.env.RENDER) {
       throw new Error(
-        "Interactive login setup is disabled in this environment. Refresh the Google session from a trusted local workstation that uses the same MongoDB connection."
+        "Interactive login setup is disabled in this cloud environment. Please run the app locally on your computer to sign in. Once signed in locally, your session will be securely saved to MongoDB and automatically used by the cloud server."
       );
     }
 
