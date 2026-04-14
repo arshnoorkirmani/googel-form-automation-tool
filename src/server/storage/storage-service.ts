@@ -4,6 +4,7 @@ import path from "node:path";
 import { authSessionRepository } from "@/server/auth/auth-session-repository";
 import { configService } from "@/server/config/config-service";
 import { historyRepository } from "@/server/history/history-repository";
+import type { OperatorContext } from "@/server/operator/operator-context";
 import { batchHistoryRepository } from "@/server/runs/batch-history-repository";
 import { batchStore } from "@/server/runs/batch-store";
 
@@ -21,6 +22,7 @@ type StorageSummary = {
   authSessionPresent: boolean;
   authMetadataPresent: boolean;
   authStore: "MONGODB";
+  operatorConfigured: boolean;
   configPresent: boolean;
   batchRunsInMemory: number;
   batchRunsPersisted: number;
@@ -115,7 +117,7 @@ async function clearDirectory(
 }
 
 class StorageService {
-  async getSummary(): Promise<StorageSummary> {
+  async getSummary(operator: OperatorContext | null): Promise<StorageSummary> {
     const config = await configService.getConfig();
     const logsDir = config.paths.logsDir;
     const artifactsDir = config.paths.artifactsDir;
@@ -136,14 +138,18 @@ class StorageService {
       excludeNames: [".gitkeep"]
     });
 
-    const batchRuns = batchStore.list();
+    const batchRuns = operator
+      ? batchStore.listByOperator(operator.operatorId)
+      : [];
     const batchHasActiveRun = batchRuns.some((run) =>
       ["RUNNING", "PAUSING", "PAUSED", "STOPPING"].includes(run.status)
     );
-    const authMetadata = await authSessionRepository.readMetadata();
+    const authMetadata = operator
+      ? await authSessionRepository.readMetadata(operator)
+      : null;
 
     return {
-      historyEntries: await historyRepository.count(),
+      historyEntries: operator ? await historyRepository.count(operator.operatorId) : 0,
       historyStore: "MONGODB",
       logFiles,
       logPersistenceEnabled: config.persistence.logFilesEnabled,
@@ -154,22 +160,33 @@ class StorageService {
       screenshotPersistenceEnabled: config.persistence.screenshotsEnabled,
       reportPersistenceEnabled: config.persistence.runReportsEnabled,
       sampleFiles,
-      authSessionPresent: await authSessionRepository.hasStorageState(),
+      authSessionPresent: operator
+        ? await authSessionRepository.hasStorageState(operator)
+        : false,
       authMetadataPresent: authMetadata !== null,
       authStore: "MONGODB",
+      operatorConfigured: Boolean(operator),
       configPresent: await exists(configPath),
       batchRunsInMemory: batchRuns.length,
-      batchRunsPersisted: await batchHistoryRepository.count(),
+      batchRunsPersisted: operator
+        ? await batchHistoryRepository.count(operator.operatorId)
+        : 0,
       batchHasActiveRun
     };
   }
 
-  async clear(action: ClearAction): Promise<void> {
+  async clear(
+    action: ClearAction,
+    operator: OperatorContext | null
+  ): Promise<void> {
     const config = await configService.getConfig();
     const samplesDir = config.paths.samplesDir;
 
     if (action === "CLEAR_HISTORY" || action === "CLEAR_NON_AUTH") {
-      await historyRepository.clear();
+      if (!operator) {
+        throw new Error("Set operator identity before clearing user-scoped history.");
+      }
+      await historyRepository.clear(operator.operatorId);
     }
 
     if (action === "CLEAR_LOGS" || action === "CLEAR_NON_AUTH") {
@@ -185,19 +202,25 @@ class StorageService {
     }
 
     if (action === "CLEAR_BATCH" || action === "CLEAR_NON_AUTH") {
-      const batchRuns = batchStore.list();
+      if (!operator) {
+        throw new Error("Set operator identity before clearing user-scoped batch data.");
+      }
+      const batchRuns = batchStore.listByOperator(operator.operatorId);
       const hasActive = batchRuns.some((run) =>
         ["RUNNING", "PAUSING", "PAUSED", "STOPPING"].includes(run.status)
       );
       if (hasActive) {
         throw new Error("Stop all active batch runs before clearing batch data.");
       }
-      batchStore.clearAll();
-      await batchHistoryRepository.clear();
+      batchStore.clearForOperator(operator.operatorId);
+      await batchHistoryRepository.clear(operator.operatorId);
     }
 
     if (action === "CLEAR_AUTH") {
-      await authSessionRepository.clear();
+      if (!operator) {
+        throw new Error("Set operator identity before clearing user-scoped auth data.");
+      }
+      await authSessionRepository.clear(operator);
     }
   }
 }

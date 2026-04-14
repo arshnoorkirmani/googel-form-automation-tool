@@ -2,6 +2,11 @@ import type { SubmissionPayload } from "@/modules/submission/submission.schema";
 import type { AuthStatus } from "@/server/auth/auth.types";
 import type { RunRecord } from "@/server/runs/run-types";
 
+export type OperatorIdentity = {
+  operatorId: string;
+  email: string;
+};
+
 async function requestJson<T>(
   input: string,
   init?: RequestInit
@@ -31,6 +36,20 @@ export const apiClient = {
     return requestJson<{ status: AuthStatus }>(
       `/api/auth/status?validate=${validate ? "1" : "0"}`
     );
+  },
+  getOperatorIdentity() {
+    return requestJson<{ operator: OperatorIdentity | null }>("/api/operator");
+  },
+  setOperatorIdentity(email: string) {
+    return requestJson<{ operator: OperatorIdentity }>("/api/operator", {
+      method: "POST",
+      body: JSON.stringify({ email })
+    });
+  },
+  clearOperatorIdentity() {
+    return requestJson<{ ok: true }>("/api/operator", {
+      method: "DELETE"
+    });
   },
   startAuthSetup() {
     return requestJson<{ message: string; startedAt: string; formUrl: string }>(

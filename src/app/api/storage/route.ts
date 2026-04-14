@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getOptionalOperatorContext } from "@/server/operator/operator-context";
 import {
   storageService,
   type ClearAction
@@ -9,7 +10,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const summary = await storageService.getSummary();
+  const operator = await getOptionalOperatorContext();
+  const summary = await storageService.getSummary(operator);
   return NextResponse.json({ summary });
 }
 
@@ -25,8 +27,9 @@ export async function POST(request: Request) {
       );
     }
 
-    await storageService.clear(action);
-    const summary = await storageService.getSummary();
+    const operator = await getOptionalOperatorContext();
+    await storageService.clear(action, operator);
+    const summary = await storageService.getSummary(operator);
     return NextResponse.json({ summary });
   } catch (error) {
     return NextResponse.json(

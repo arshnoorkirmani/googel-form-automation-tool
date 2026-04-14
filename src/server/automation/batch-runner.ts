@@ -11,6 +11,7 @@ import { fillRemarksPage } from "@/server/automation/form/page3-remarks";
 import { withRetries } from "@/server/automation/retry";
 import { configService } from "@/server/config/config-service";
 import { createLogger } from "@/server/logging/logger";
+import type { OperatorContext } from "@/server/operator/operator-context";
 import { artifactService } from "@/server/reports/artifact-service";
 import { batchHistoryRepository } from "@/server/runs/batch-history-repository";
 import { batchStore, type BatchRunRecord } from "@/server/runs/batch-store";
@@ -29,7 +30,11 @@ function getRandomUnsupported() {
 }
 
 class BatchAutomationRunner {
-  async execute(batchId: string, submission: BatchSubmissionPayload): Promise<void> {
+  async execute(
+    batchId: string,
+    submission: BatchSubmissionPayload,
+    operator: OperatorContext
+  ): Promise<void> {
     const logger = createLogger(batchId);
     const config = await configService.getConfig();
     let session: BrowserSession | null = null;
@@ -38,13 +43,13 @@ class BatchAutomationRunner {
     await this.persistCurrentBatch(batchStore.setBatchRunning(batchId));
 
     try {
-      await authService.assertValidSession();
+      await authService.assertValidSession(operator);
       await logger.info("batch.session.loaded", { mode: submission.mode });
 
       session = await browserFactory.createSession({
         debug: submission.debug,
         useSavedSession: true
-      });
+      }, operator);
 
       if (!session) {
         throw new Error("Browser session could not be created.");
@@ -212,14 +217,18 @@ class BatchAutomationRunner {
   }
 
   // Support retry functionality
-  async retry(batchId: string, itemIds: string[]): Promise<void> {
+  async retry(
+    batchId: string,
+    itemIds: string[],
+    operator: OperatorContext
+  ): Promise<void> {
     const record = batchStore.get(batchId);
     if (!record) throw new Error("Batch not found.");
 
     await this.execute(batchId, {
       ...record.submission,
       foNumberList: itemIds
-    });
+    }, operator);
   }
 
   private async waitWithControl(batchId: string, delaySeconds: number): Promise<void> {

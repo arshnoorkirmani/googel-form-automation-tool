@@ -30,6 +30,7 @@ export type RunArtifacts = {
 
 export type RunRecord = {
   id: string;
+  operatorId: string;
   createdAt: string;
   startedAt?: string;
   completedAt?: string;
@@ -49,10 +50,12 @@ export type RunRecord = {
 
 export function createQueuedRunRecord(
   id: string,
-  submission: SubmissionPayload
+  submission: SubmissionPayload,
+  operatorId: string
 ): RunRecord {
   return {
     id,
+    operatorId,
     createdAt: new Date().toISOString(),
     status: "QUEUED",
     mode: submission.mode,

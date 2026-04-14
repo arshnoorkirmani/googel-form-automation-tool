@@ -7,15 +7,24 @@ import { authService } from "@/server/auth/auth-service";
 import { authSetupManager } from "@/server/auth/auth-setup-manager";
 import { configService } from "@/server/config/config-service";
 import { historyRepository } from "@/server/history/history-repository";
+import { getOptionalOperatorContext } from "@/server/operator/operator-context";
 
 export default async function DashboardPage() {
   const config = await configService.getConfig();
-  const history = await historyRepository.list();
+  const operator = await getOptionalOperatorContext();
+  const history = operator ? await historyRepository.list(operator.operatorId) : [];
   const successful = history.filter((run) => run.status === "SUCCEEDED").length;
   const failed = history.filter((run) => run.status === "FAILED").length;
 
-  const authStatus = await authService.getStatus(false);
-  const initialStatus = authSetupManager.getActiveSession()
+  const authStatus = operator
+    ? await authService.getStatus(operator, false)
+    : {
+        state: "MISSING" as const,
+        reason: "Set your @blackbuck.com operator email in Settings to isolate auth and history.",
+        sessionStorageLocation: "MongoDB (operator not configured)"
+      };
+  const initialStatus =
+    operator && authSetupManager.getActiveSession(operator.operatorId)
     ? {
         ...authStatus,
         state: "SETUP_IN_PROGRESS" as const
@@ -37,6 +46,7 @@ export default async function DashboardPage() {
       <AuthStatusCard
         initialStatus={initialStatus}
         interactiveSetupEnabled={config.auth.interactiveSetupEnabled}
+        operatorConfigured={Boolean(operator)}
       />
 
       <section className="space-y-4">

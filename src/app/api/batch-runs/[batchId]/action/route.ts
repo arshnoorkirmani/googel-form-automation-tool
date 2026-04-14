@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireOperatorContext } from "@/server/operator/operator-context";
 import { batchHistoryRepository } from "@/server/runs/batch-history-repository";
 import { batchStore } from "@/server/runs/batch-store";
 
@@ -13,9 +14,14 @@ export async function POST(
   try {
     const { action } = await request.json();
     const { batchId } = await params;
+    const operator = await requireOperatorContext();
 
-    if (!batchStore.get(batchId)) {
-      const persisted = await batchHistoryRepository.getById(batchId);
+    const inMemory = batchStore.get(batchId);
+    if (!inMemory || inMemory.operatorId !== operator.operatorId) {
+      const persisted = await batchHistoryRepository.getById(
+        batchId,
+        operator.operatorId
+      );
       if (!persisted) {
         return NextResponse.json({ error: "Batch not found" }, { status: 404 });
       }

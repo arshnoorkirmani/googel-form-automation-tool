@@ -7,6 +7,10 @@ import {
 } from "@/server/auth/auth-session-repository";
 import type { AuthMetadata } from "@/server/auth/auth.types";
 import { historyRepository } from "@/server/history/history-repository";
+import {
+  buildOperatorContext,
+  normalizeOperatorEmail
+} from "@/server/operator/operator-context";
 import type { RunRecord } from "@/server/runs/run-types";
 
 async function exists(targetPath: string): Promise<boolean> {
@@ -28,6 +32,15 @@ async function readJsonIfExists<T>(targetPath: string): Promise<T | null> {
 }
 
 async function migrate(): Promise<void> {
+  const operatorEmail = process.env.LEGACY_MIGRATION_OPERATOR_EMAIL?.trim();
+
+  if (!operatorEmail) {
+    throw new Error(
+      "LEGACY_MIGRATION_OPERATOR_EMAIL is required to map legacy local data to a specific user."
+    );
+  }
+
+  const operator = buildOperatorContext(normalizeOperatorEmail(operatorEmail));
   const legacyHistoryPath = path.resolve(process.cwd(), "storage/history/runs.json");
   const legacyAuthMetadataPath = path.resolve(
     process.cwd(),
@@ -47,22 +60,29 @@ async function migrate(): Promise<void> {
   let migratedRuns = 0;
   if (history?.length) {
     for (const run of history) {
-      await historyRepository.append(run);
+      await historyRepository.append({
+        ...run,
+        operatorId: operator.operatorId
+      } as RunRecord);
       migratedRuns += 1;
     }
   }
 
   if (authMetadata) {
-    await authSessionRepository.saveMetadata(authMetadata);
+    await authSessionRepository.saveMetadata(operator, authMetadata);
   }
 
   if (storageState) {
-    await authSessionRepository.saveStorageState(storageState as BrowserStorageState);
+    await authSessionRepository.saveStorageState(
+      operator,
+      storageState as BrowserStorageState
+    );
   }
 
   process.stdout.write(
     [
       `Migrated run records: ${migratedRuns}`,
+      `Migrated operator: ${operator.email}`,
       `Migrated auth metadata: ${authMetadata ? "yes" : "no"}`,
       `Migrated browser session state: ${storageState ? "yes" : "no"}`
     ].join("\n") + "\n"

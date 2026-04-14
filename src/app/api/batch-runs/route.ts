@@ -5,6 +5,7 @@ import { batchSubmissionSchema } from "@/modules/submission/batch.schema";
 import { authService } from "@/server/auth/auth-service";
 import { authSetupManager } from "@/server/auth/auth-setup-manager";
 import { batchAutomationRunner } from "@/server/automation/batch-runner";
+import { requireOperatorContext } from "@/server/operator/operator-context";
 import { batchHistoryRepository } from "@/server/runs/batch-history-repository";
 import { runQueue } from "@/server/runs/run-queue";
 import { batchStore } from "@/server/runs/batch-store";
@@ -14,7 +15,9 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
-    if (authSetupManager.getActiveSession()) {
+    const operator = await requireOperatorContext();
+
+    if (authSetupManager.getActiveSession(operator.operatorId)) {
       return NextResponse.json(
         {
           error:
@@ -24,7 +27,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const authStatus = await authService.getStatus(true);
+    const authStatus = await authService.getStatus(operator, true);
     if (authStatus.state !== "VALID") {
       return NextResponse.json(
         {
@@ -39,12 +42,12 @@ export async function POST(request: Request) {
     const payload = await request.json();
     const submission = batchSubmissionSchema.parse(payload);
     const batchId = createRunId();
-    const batchRun = batchStore.create(batchId, submission);
+    const batchRun = batchStore.create(batchId, submission, operator.operatorId);
     await batchHistoryRepository.upsert(batchRun);
 
     runQueue.enqueue(async () => {
       try {
-        await batchAutomationRunner.execute(batchId, submission);
+        await batchAutomationRunner.execute(batchId, submission, operator);
       } catch {
         // Run state and history are already persisted by the runner.
       }

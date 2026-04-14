@@ -21,12 +21,12 @@ async function ensureIndexes(
   if (!globalThis.__historyIndexesPromise__) {
     globalThis.__historyIndexesPromise__ = collection.createIndexes([
       {
-        key: { createdAt: -1 } as IndexDescription["key"],
-        name: "createdAt_desc"
+        key: { operatorId: 1, createdAt: -1 } as IndexDescription["key"],
+        name: "operatorId_createdAt_desc"
       },
       {
-        key: { status: 1, createdAt: -1 } as IndexDescription["key"],
-        name: "status_createdAt_desc"
+        key: { operatorId: 1, status: 1, createdAt: -1 } as IndexDescription["key"],
+        name: "operatorId_status_createdAt_desc"
       }
     ]).then(() => undefined);
   }
@@ -40,10 +40,10 @@ function toRunRecord(document: RunRecordDocument): RunRecord {
 }
 
 class HistoryRepository {
-  async list(): Promise<RunRecord[]> {
+  async list(operatorId: string): Promise<RunRecord[]> {
     const collection = await this.getCollection();
     const documents = await collection
-      .find({})
+      .find({ operatorId })
       .sort({ createdAt: -1 })
       .toArray();
 
@@ -52,9 +52,9 @@ class HistoryRepository {
     );
   }
 
-  async getById(runId: string): Promise<RunRecord | null> {
+  async getById(runId: string, operatorId: string): Promise<RunRecord | null> {
     const collection = await this.getCollection();
-    const document = await collection.findOne({ _id: runId });
+    const document = await collection.findOne({ _id: runId, operatorId });
     return document ? this.recoverIfStale(toRunRecord(document)) : null;
   }
 
@@ -72,14 +72,14 @@ class HistoryRepository {
     );
   }
 
-  async count(): Promise<number> {
+  async count(operatorId: string): Promise<number> {
     const collection = await this.getCollection();
-    return collection.countDocuments();
+    return collection.countDocuments({ operatorId });
   }
 
-  async clear(): Promise<void> {
+  async clear(operatorId: string): Promise<void> {
     const collection = await this.getCollection();
-    await collection.deleteMany({});
+    await collection.deleteMany({ operatorId });
   }
 
   async recoverIfStale(record: RunRecord): Promise<RunRecord> {

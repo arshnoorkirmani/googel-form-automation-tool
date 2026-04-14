@@ -27,12 +27,12 @@ async function ensureIndexes(
   if (!globalThis.__batchHistoryIndexesPromise__) {
     globalThis.__batchHistoryIndexesPromise__ = collection.createIndexes([
       {
-        key: { startedAt: -1 } as IndexDescription["key"],
-        name: "startedAt_desc"
+        key: { operatorId: 1, startedAt: -1 } as IndexDescription["key"],
+        name: "operatorId_startedAt_desc"
       },
       {
-        key: { status: 1, startedAt: -1 } as IndexDescription["key"],
-        name: "status_startedAt_desc"
+        key: { operatorId: 1, status: 1, startedAt: -1 } as IndexDescription["key"],
+        name: "operatorId_status_startedAt_desc"
       }
     ]).then(() => undefined);
   }
@@ -48,9 +48,12 @@ function toBatchRunRecord(document: BatchRunRecordDocument): BatchRunRecord {
 class BatchHistoryRepository {
   private readonly collectionName = "batchRuns";
 
-  async getById(batchId: string): Promise<BatchRunRecord | null> {
+  async getById(
+    batchId: string,
+    operatorId: string
+  ): Promise<BatchRunRecord | null> {
     const collection = await this.getCollection();
-    const document = await collection.findOne({ _id: batchId });
+    const document = await collection.findOne({ _id: batchId, operatorId });
 
     return document ? toBatchRunRecord(document) : null;
   }
@@ -90,14 +93,14 @@ class BatchHistoryRepository {
     return recovered;
   }
 
-  async count(): Promise<number> {
+  async count(operatorId: string): Promise<number> {
     const collection = await this.getCollection();
-    return collection.countDocuments();
+    return collection.countDocuments({ operatorId });
   }
 
-  async clear(): Promise<void> {
+  async clear(operatorId: string): Promise<void> {
     const collection = await this.getCollection();
-    await collection.deleteMany({});
+    await collection.deleteMany({ operatorId });
   }
 
   private async getCollection(): Promise<Collection<BatchRunRecordDocument>> {

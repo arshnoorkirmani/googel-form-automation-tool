@@ -14,8 +14,12 @@ class RunStore {
   private readonly store =
     globalThis.__runStore__ ?? (globalThis.__runStore__ = new Map());
 
-  create(runId: string, submission: RunRecord["submission"]): RunRecord {
-    const record = createQueuedRunRecord(runId, submission);
+  create(
+    runId: string,
+    submission: RunRecord["submission"],
+    operatorId: string
+  ): RunRecord {
+    const record = createQueuedRunRecord(runId, submission, operatorId);
     this.store.set(runId, record);
     return record;
   }

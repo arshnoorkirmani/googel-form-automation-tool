@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireOperatorContext } from "@/server/operator/operator-context";
 import { batchHistoryRepository } from "@/server/runs/batch-history-repository";
 import { batchStore } from "@/server/runs/batch-store";
 import { batchAutomationRunner } from "@/server/automation/batch-runner";
@@ -13,10 +14,14 @@ export async function POST(
   { params }: { params: Promise<{ batchId: string }> }
 ) {
   const { batchId } = await params;
+  const operator = await requireOperatorContext();
   let batchRun = batchStore.get(batchId);
 
-  if (!batchRun) {
-    const persisted = await batchHistoryRepository.getById(batchId);
+  if (!batchRun || batchRun.operatorId !== operator.operatorId) {
+    const persisted = await batchHistoryRepository.getById(
+      batchId,
+      operator.operatorId
+    );
     if (!persisted) {
       return new NextResponse("Not Found", { status: 404 });
     }
@@ -44,7 +49,7 @@ export async function POST(
 
   runQueue.enqueue(async () => {
     try {
-      await batchAutomationRunner.retry(batchId, itemIds);
+      await batchAutomationRunner.retry(batchId, itemIds, operator);
     } catch {
       // Runner handles state.
     }

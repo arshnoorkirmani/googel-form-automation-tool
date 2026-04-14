@@ -14,6 +14,7 @@ export type AuthMetadata = {
 
 export type AuthStatus = {
   state: AuthSessionState | "SETUP_IN_PROGRESS";
+  operatorEmail?: string;
   detectedEmail?: string;
   savedAt?: string;
   lastValidatedAt?: string;

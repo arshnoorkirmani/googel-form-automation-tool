@@ -2,9 +2,11 @@ export const dynamic = "force-dynamic";
 
 import { HistoryTable } from "@/components/history/history-table";
 import { historyRepository } from "@/server/history/history-repository";
+import { getOptionalOperatorContext } from "@/server/operator/operator-context";
 
 export default async function HistoryPage() {
-  const history = await historyRepository.list();
+  const operator = await getOptionalOperatorContext();
+  const history = operator ? await historyRepository.list(operator.operatorId) : [];
 
   return (
     <div className="space-y-4">

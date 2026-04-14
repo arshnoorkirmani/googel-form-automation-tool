@@ -7,6 +7,7 @@ import type {
 } from "@/server/auth/auth.types";
 import { configService } from "@/server/config/config-service";
 import { createLogger } from "@/server/logging/logger";
+import type { OperatorContext } from "@/server/operator/operator-context";
 import {
   sessionValidator,
   type SessionValidationResult
@@ -22,24 +23,29 @@ export class ReAuthRequiredError extends Error {
 class AuthService {
   private readonly logger = createLogger("auth");
 
-  async getStatus(validate = false): Promise<AuthStatus> {
-    const hasStateFile = await this.hasSavedSession();
+  async getStatus(
+    operator: OperatorContext,
+    validate = false
+  ): Promise<AuthStatus> {
+    const hasStateFile = await this.hasSavedSession(operator);
     const sessionStorageLocation =
-      await authSessionRepository.getStorageLocation();
+      await authSessionRepository.getStorageLocation(operator);
 
     if (!hasStateFile) {
       return {
         state: "MISSING",
+        operatorEmail: operator.email,
         reason: "No saved browser session was found.",
         sessionStorageLocation
       };
     }
 
-    const metadata = await this.readMetadata();
+    const metadata = await this.readMetadata(operator);
 
     if (!validate) {
       return {
         state: metadata?.state ?? "VALID",
+        operatorEmail: operator.email,
         detectedEmail: metadata?.detectedEmail,
         savedAt: metadata?.savedAt,
         lastValidatedAt: metadata?.lastValidatedAt,
@@ -48,10 +54,11 @@ class AuthService {
       };
     }
 
-    const result = await this.validateSavedSession();
+    const result = await this.validateSavedSession(operator);
 
     return {
       state: result.state === "VALID" ? "VALID" : result.state,
+      operatorEmail: operator.email,
       detectedEmail: result.detectedEmail,
       savedAt: metadata?.savedAt,
       lastValidatedAt: new Date().toISOString(),
@@ -60,13 +67,15 @@ class AuthService {
     };
   }
 
-  async hasSavedSession(): Promise<boolean> {
-    return authSessionRepository.hasStorageState();
+  async hasSavedSession(operator: OperatorContext): Promise<boolean> {
+    return authSessionRepository.hasStorageState(operator);
   }
 
-  async validateSavedSession(): Promise<SessionValidationResult> {
+  async validateSavedSession(
+    operator: OperatorContext
+  ): Promise<SessionValidationResult> {
     const config = await configService.getConfig();
-    const storageState = await authSessionRepository.getStorageState();
+    const storageState = await authSessionRepository.getStorageState(operator);
 
     if (!storageState) {
       return {
@@ -97,9 +106,9 @@ class AuthService {
       });
 
       const result = await sessionValidator.validateFormAccess(page);
-      await authSessionRepository.saveMetadata({
+      await authSessionRepository.saveMetadata(operator, {
         state: result.state,
-        savedAt: (await this.readMetadata())?.savedAt,
+        savedAt: (await this.readMetadata(operator))?.savedAt,
         lastValidatedAt: new Date().toISOString(),
         detectedEmail: result.detectedEmail,
         reason: result.reason
@@ -112,8 +121,8 @@ class AuthService {
     }
   }
 
-  async assertValidSession(): Promise<void> {
-    const status = await this.getStatus(true);
+  async assertValidSession(operator: OperatorContext): Promise<void> {
+    const status = await this.getStatus(operator, true);
 
     if (status.state !== "VALID") {
       throw new ReAuthRequiredError(
@@ -122,12 +131,15 @@ class AuthService {
     }
   }
 
-  async saveMetadata(metadata: AuthMetadata): Promise<void> {
-    await authSessionRepository.saveMetadata(metadata);
+  async saveMetadata(
+    operator: OperatorContext,
+    metadata: AuthMetadata
+  ): Promise<void> {
+    await authSessionRepository.saveMetadata(operator, metadata);
   }
 
-  async readMetadata(): Promise<AuthMetadata | null> {
-    return authSessionRepository.readMetadata();
+  async readMetadata(operator: OperatorContext): Promise<AuthMetadata | null> {
+    return authSessionRepository.readMetadata(operator);
   }
 }
 

@@ -16,6 +16,7 @@ export type BatchItemRecord = {
 
 export type BatchRunRecord = {
   batchId: string;
+  operatorId: string;
   status: "QUEUED" | "RUNNING" | "PAUSING" | "PAUSED" | "STOPPING" | "STOPPED" | "COMPLETED" | "FAILED";
   submission: BatchSubmissionPayload;
   items: BatchItemRecord[];
@@ -40,9 +41,14 @@ class BatchStore {
     return record;
   }
 
-  create(batchId: string, submission: BatchSubmissionPayload): BatchRunRecord {
+  create(
+    batchId: string,
+    submission: BatchSubmissionPayload,
+    operatorId: string
+  ): BatchRunRecord {
     const record: BatchRunRecord = {
       batchId,
+      operatorId,
       status: "QUEUED",
       submission,
       items: submission.foNumberList.map((foNumber) => ({
@@ -62,8 +68,16 @@ class BatchStore {
     return Array.from(this.store.values());
   }
 
-  clearAll(): void {
-    this.store.clear();
+  listByOperator(operatorId: string): BatchRunRecord[] {
+    return this.list().filter((record) => record.operatorId === operatorId);
+  }
+
+  clearForOperator(operatorId: string): void {
+    for (const [key, value] of this.store.entries()) {
+      if (value.operatorId === operatorId) {
+        this.store.delete(key);
+      }
+    }
   }
 
   setBatchRunning(batchId: string): BatchRunRecord {

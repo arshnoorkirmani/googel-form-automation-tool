@@ -9,11 +9,13 @@ import type { AuthStatus } from "@/server/auth/auth.types";
 type AuthStatusCardProps = {
   initialStatus: AuthStatus;
   interactiveSetupEnabled: boolean;
+  operatorConfigured: boolean;
 };
 
 export function AuthStatusCard({
   initialStatus,
-  interactiveSetupEnabled
+  interactiveSetupEnabled,
+  operatorConfigured
 }: AuthStatusCardProps) {
   const [status, setStatus] = useState(initialStatus);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -118,6 +120,12 @@ export function AuthStatusCard({
             connection.
           </p>
         ) : null}
+        {!operatorConfigured ? (
+          <p>
+            Set your operator email in Settings first. Auth/session data is isolated
+            per operator and will not use a shared login.
+          </p>
+        ) : null}
       </div>
 
       <div className="mt-6 flex flex-wrap gap-3">
@@ -133,7 +141,7 @@ export function AuthStatusCard({
           type="button"
           onClick={startSetup}
           className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white"
-          disabled={isPending || !interactiveSetupEnabled}
+          disabled={isPending || !interactiveSetupEnabled || !operatorConfigured}
         >
           Start Login Setup
         </button>
@@ -141,7 +149,7 @@ export function AuthStatusCard({
           type="button"
           onClick={completeSetup}
           className="rounded-xl border border-line bg-white px-4 py-2 text-sm font-medium text-text"
-          disabled={isPending || !interactiveSetupEnabled}
+          disabled={isPending || !interactiveSetupEnabled || !operatorConfigured}
         >
           Finish Login Setup
         </button>
@@ -149,7 +157,7 @@ export function AuthStatusCard({
           type="button"
           onClick={cancelSetup}
           className="rounded-xl border border-line bg-white px-4 py-2 text-sm font-medium text-text"
-          disabled={isPending || !interactiveSetupEnabled}
+          disabled={isPending || !interactiveSetupEnabled || !operatorConfigured}
         >
           Cancel
         </button>

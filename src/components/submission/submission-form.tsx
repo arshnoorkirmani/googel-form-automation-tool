@@ -22,6 +22,7 @@ import {
   submissionSchema,
   type SubmissionPayload
 } from "@/modules/submission/submission.schema";
+import type { OperatorIdentity } from "@/lib/api/client";
 import type {
   SubmissionFormValues,
   SubmissionSummaryItem
@@ -114,6 +115,7 @@ export function SubmissionForm() {
   const [stagedPayload, setStagedPayload] = useState<SubmissionPayload | null>(null);
   const [activeRun, setActiveRun] = useState<RunRecord | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
+  const [operator, setOperator] = useState<OperatorIdentity | null>(null);
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
@@ -134,14 +136,17 @@ export function SubmissionForm() {
   useEffect(() => {
     let mounted = true;
 
-    void apiClient
-      .getAuthStatus(true)
-      .then((result) => {
+    void Promise.all([
+      apiClient.getOperatorIdentity(),
+      apiClient.getAuthStatus(true)
+    ])
+      .then(([operatorResult, authResult]) => {
         if (!mounted) {
           return;
         }
 
-        setAuthStatus(result.status);
+        setOperator(operatorResult.operator);
+        setAuthStatus(authResult.status);
       })
       .catch((error) => {
         if (!mounted) {
@@ -294,6 +299,19 @@ export function SubmissionForm() {
           </div>
         ) : null}
 
+        {!authLoading && !operator ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <p className="font-medium">Operator identity required before runs can start.</p>
+            <p className="mt-1">
+              Open{" "}
+              <Link href="/settings" className="font-medium underline">
+                Settings
+              </Link>{" "}
+              and save your `@blackbuck.com` operator email first.
+            </p>
+          </div>
+        ) : null}
+
         <form className="space-y-6" onSubmit={(event) => event.preventDefault()}>
           <CommonFieldsSection
             register={register}
@@ -337,7 +355,7 @@ export function SubmissionForm() {
             <button
               type="button"
               onClick={onPreview}
-              disabled={authLoading || authStatus?.state !== "VALID"}
+              disabled={authLoading || !operator || authStatus?.state !== "VALID"}
               className="rounded-xl bg-accent px-5 py-2.5 text-sm font-medium text-white"
             >
               Preview Submission

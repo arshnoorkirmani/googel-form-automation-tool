@@ -17,9 +17,14 @@ import { createLogger } from "@/server/logging/logger";
 import { artifactService } from "@/server/reports/artifact-service";
 import { runStore } from "@/server/runs/run-store";
 import type { RunRecord } from "@/server/runs/run-types";
+import type { OperatorContext } from "@/server/operator/operator-context";
 
 class AutomationRunner {
-  async execute(runId: string, submission: SubmissionPayload): Promise<RunRecord> {
+  async execute(
+    runId: string,
+    submission: SubmissionPayload,
+    operator: OperatorContext
+  ): Promise<RunRecord> {
     const logger = createLogger(runId);
     const config = await configService.getConfig();
     let session: BrowserSession | null = null;
@@ -28,7 +33,7 @@ class AutomationRunner {
     runStore.setRunning(runId);
 
     try {
-      await authService.assertValidSession();
+      await authService.assertValidSession(operator);
       runStore.addProgress(runId, "SESSION_LOADED", "Saved session loaded");
       await logger.info("run.session.loaded", {
         callStatus: submission.callStatus,
@@ -38,7 +43,7 @@ class AutomationRunner {
       session = await browserFactory.createSession({
         debug: submission.debug,
         useSavedSession: true
-      });
+      }, operator);
 
       await withRetries(
         async () => {

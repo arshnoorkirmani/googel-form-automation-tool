@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 
@@ -17,6 +18,8 @@ import {
   delaySecondsToFormsPerMinute,
   formsPerMinuteToDelaySeconds
 } from "@/lib/utils/timing";
+import { apiClient, type OperatorIdentity } from "@/lib/api/client";
+import type { AuthStatus } from "@/server/auth/auth.types";
 import type { BatchRunRecord } from "@/server/runs/batch-store";
 
 type BatchFormType = Omit<BatchSubmissionPayload, "foNumberList"> & { foNumberInput: string };
@@ -58,6 +61,9 @@ export function BatchSubmissionForm({
   });
 
   const [runError, setRunError] = useState<string | null>(null);
+  const [operator, setOperator] = useState<OperatorIdentity | null>(null);
+  const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
   const [rateInput, setRateInput] = useState("");
   const [rateError, setRateError] = useState<string | null>(null);
@@ -74,6 +80,32 @@ export function BatchSubmissionForm({
     : null;
   const effectiveRate =
     effectiveDelaySeconds ? delaySecondsToFormsPerMinute(effectiveDelaySeconds) : null;
+
+  useEffect(() => {
+    let mounted = true;
+
+    void Promise.all([
+      apiClient.getOperatorIdentity(),
+      apiClient.getAuthStatus(true)
+    ])
+      .then(([operatorResult, authResult]) => {
+        if (!mounted) {
+          return;
+        }
+
+        setOperator(operatorResult.operator);
+        setAuthStatus(authResult.status);
+      })
+      .finally(() => {
+        if (mounted) {
+          setAuthLoading(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const onCallStatusChange = (nextValue: string) => {
     const currentValues = getValues();
@@ -185,6 +217,28 @@ export function BatchSubmissionForm({
       </div>
 
       <form className="space-y-6" onSubmit={(event) => event.preventDefault()}>
+        {!authLoading && !operator ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <p className="font-medium">Operator identity required before batch runs can start.</p>
+            <p className="mt-1">
+              Open{" "}
+              <Link href="/settings" className="font-medium underline">
+                Settings
+              </Link>{" "}
+              and save your `@blackbuck.com` operator email first.
+            </p>
+          </div>
+        ) : null}
+
+        {!authLoading && operator && authStatus && authStatus.state !== "VALID" ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <p className="font-medium">Login setup required before batch runs can start.</p>
+            <p className="mt-1">
+              {authStatus.reason ?? "No reusable browser session is available."}
+            </p>
+          </div>
+        ) : null}
+
         <section className="rounded-2xl border border-line bg-surface p-6 shadow-panel">
            <div className="mb-5">
              <h3 className="text-lg font-semibold text-text">FO Numbers Input</h3>
@@ -301,7 +355,7 @@ export function BatchSubmissionForm({
           <button
             type="button"
             onClick={onSubmit}
-            disabled={isPending}
+            disabled={isPending || authLoading || !operator || authStatus?.state !== "VALID"}
             className="rounded-xl bg-accent px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50"
           >
             Start Batch Loop

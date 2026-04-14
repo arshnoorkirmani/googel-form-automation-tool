@@ -2,6 +2,7 @@ import { chromium, type Browser, type BrowserContext } from "playwright";
 
 import { authSessionRepository } from "@/server/auth/auth-session-repository";
 import { configService } from "@/server/config/config-service";
+import type { OperatorContext } from "@/server/operator/operator-context";
 
 export type BrowserSessionOptions = {
   debug?: boolean;
@@ -15,12 +16,15 @@ export type BrowserSession = {
 
 class BrowserFactory {
   async createSession(
-    options: BrowserSessionOptions = {}
+    options: BrowserSessionOptions = {},
+    operator?: OperatorContext
   ): Promise<BrowserSession> {
     const config = await configService.getConfig();
     const debug = options.debug ?? false;
     const persistedStorageState = options.useSavedSession
-      ? await authSessionRepository.getStorageState()
+      ? operator
+        ? await authSessionRepository.getStorageState(operator)
+        : null
       : undefined;
 
     if (options.useSavedSession && !persistedStorageState) {

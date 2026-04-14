@@ -1,14 +1,24 @@
 export const dynamic = "force-dynamic";
 
 import { AuthStatusCard } from "@/components/dashboard/auth-status-card";
+import { OperatorIdentityCard } from "@/components/dashboard/operator-identity-card";
 import { authService } from "@/server/auth/auth-service";
 import { authSetupManager } from "@/server/auth/auth-setup-manager";
 import { configService } from "@/server/config/config-service";
+import { getOptionalOperatorContext } from "@/server/operator/operator-context";
 
 export default async function SettingsPage() {
   const config = await configService.getConfig();
-  const authStatus = await authService.getStatus(false);
-  const initialStatus = authSetupManager.getActiveSession()
+  const operator = await getOptionalOperatorContext();
+  const authStatus = operator
+    ? await authService.getStatus(operator, false)
+    : {
+        state: "MISSING" as const,
+        reason: "Set your @blackbuck.com operator email first.",
+        sessionStorageLocation: "MongoDB (operator not configured)"
+      };
+  const initialStatus =
+    operator && authSetupManager.getActiveSession(operator.operatorId)
     ? {
         ...authStatus,
         state: "SETUP_IN_PROGRESS" as const
@@ -17,9 +27,11 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-6">
+      <OperatorIdentityCard initialOperatorEmail={operator?.email} />
       <AuthStatusCard
         initialStatus={initialStatus}
         interactiveSetupEnabled={config.auth.interactiveSetupEnabled}
+        operatorConfigured={Boolean(operator)}
       />
 
       <section className="rounded-2xl border border-line bg-surface p-6 shadow-panel">

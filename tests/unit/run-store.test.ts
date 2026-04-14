@@ -16,7 +16,7 @@ describe("runStore", () => {
       notInterestedReason: "Load Issue"
     } as const;
 
-    runStore.create(runId, submission);
+    runStore.create(runId, submission, "tester@blackbuck.com");
     runStore.setRunning(runId);
     runStore.addProgress(runId, "FORM_OPENED", "Form opened");
     const completed = runStore.succeed(runId, "Dry run completed.", false);

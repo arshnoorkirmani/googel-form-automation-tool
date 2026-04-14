@@ -16,6 +16,7 @@ type StorageSummary = {
   authSessionPresent: boolean;
   authMetadataPresent: boolean;
   authStore: "MONGODB";
+  operatorConfigured?: boolean;
   configPresent: boolean;
   batchRunsInMemory: number;
   batchRunsPersisted: number;
@@ -230,6 +231,12 @@ export function DataManagementView() {
             {summary.authMetadataPresent ? "Metadata present." : "No metadata."}{" "}
             Stored in {summary.authStore.toLowerCase()}.
           </p>
+          {!summary.operatorConfigured ? (
+            <p className="mt-2 text-xs text-muted">
+              Set operator identity in Settings to inspect or clear user-scoped auth,
+              history, and batch data.
+            </p>
+          ) : null}
           <button
             type="button"
             onClick={() => runClear("CLEAR_AUTH")}

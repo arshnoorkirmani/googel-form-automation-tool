@@ -5,9 +5,14 @@ import { authSessionRepository } from "@/server/auth/auth-session-repository";
 import { authService } from "@/server/auth/auth-service";
 import { configService } from "@/server/config/config-service";
 import { createLogger } from "@/server/logging/logger";
+import {
+  normalizeOperatorEmail,
+  type OperatorContext
+} from "@/server/operator/operator-context";
 import { sessionValidator } from "@/server/auth/session-validator";
 
 type SetupSession = {
+  operatorId: string;
   browser: Browser;
   context: BrowserContext;
   page: Page;
@@ -16,17 +21,20 @@ type SetupSession = {
 
 declare global {
   // eslint-disable-next-line no-var
-  var __authSetupSession__: SetupSession | undefined;
+  var __authSetupSessions__: Map<string, SetupSession> | undefined;
 }
 
 class AuthSetupManager {
   private readonly logger = createLogger("auth-setup");
+  private readonly sessions =
+    globalThis.__authSetupSessions__ ??
+    (globalThis.__authSetupSessions__ = new Map());
 
-  getActiveSession(): SetupSession | null {
-    return globalThis.__authSetupSession__ ?? null;
+  getActiveSession(operatorId: string): SetupSession | null {
+    return this.sessions.get(operatorId) ?? null;
   }
 
-  async start(): Promise<{
+  async start(operator: OperatorContext): Promise<{
     startedAt: string;
     message: string;
     formUrl: string;
@@ -39,7 +47,7 @@ class AuthSetupManager {
       );
     }
 
-    const active = this.getActiveSession();
+    const active = this.getActiveSession(operator.operatorId);
 
     if (active) {
       return {
@@ -64,13 +72,14 @@ class AuthSetupManager {
     await page.goto(config.formUrl, { waitUntil: "domcontentloaded" });
 
     const session: SetupSession = {
+      operatorId: operator.operatorId,
       browser,
       context,
       page,
       startedAt: new Date().toISOString()
     };
 
-    globalThis.__authSetupSession__ = session;
+    this.sessions.set(operator.operatorId, session);
 
     await this.logger.info("auth.setup.started", {
       startedAt: session.startedAt
@@ -84,12 +93,12 @@ class AuthSetupManager {
     };
   }
 
-  async complete(): Promise<{
+  async complete(operator: OperatorContext): Promise<{
     savedAt: string;
     detectedEmail?: string;
     message: string;
   }> {
-    const active = this.getActiveSession();
+    const active = this.getActiveSession(operator.operatorId);
 
     if (!active) {
       throw new Error("No login setup window is active.");
@@ -104,10 +113,20 @@ class AuthSetupManager {
     }
 
     const storageState = await active.context.storageState();
-    await authSessionRepository.saveStorageState(storageState);
+    const detectedEmail = result.detectedEmail
+      ? normalizeOperatorEmail(result.detectedEmail)
+      : undefined;
+
+    if (detectedEmail && detectedEmail !== operator.operatorId) {
+      throw new Error(
+        `The signed-in Google account (${detectedEmail}) does not match the configured operator (${operator.email}).`
+      );
+    }
+
+    await authSessionRepository.saveStorageState(operator, storageState);
 
     const savedAt = new Date().toISOString();
-    await authService.saveMetadata({
+    await authService.saveMetadata(operator, {
       state: "VALID",
       savedAt,
       lastValidatedAt: savedAt,
@@ -120,7 +139,7 @@ class AuthSetupManager {
       detectedEmail: result.detectedEmail
     });
 
-    await this.closeActiveSession();
+    await this.closeActiveSession(operator.operatorId);
 
     return {
       savedAt,
@@ -129,13 +148,13 @@ class AuthSetupManager {
     };
   }
 
-  async cancel(): Promise<void> {
-    await this.closeActiveSession();
+  async cancel(operatorId: string): Promise<void> {
+    await this.closeActiveSession(operatorId);
     await this.logger.warn("auth.setup.cancelled");
   }
 
-  private async closeActiveSession(): Promise<void> {
-    const active = this.getActiveSession();
+  private async closeActiveSession(operatorId: string): Promise<void> {
+    const active = this.getActiveSession(operatorId);
 
     if (!active) {
       return;
@@ -143,7 +162,7 @@ class AuthSetupManager {
 
     await active.context.close();
     await active.browser.close();
-    globalThis.__authSetupSession__ = undefined;
+    this.sessions.delete(operatorId);
   }
 }
 
