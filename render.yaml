@@ -2,7 +2,7 @@ services:
   - type: web
     name: dispositions-form-automation
     env: node
-    buildCommand: npm install --include=dev && npx playwright install chromium && npm run build
+    buildCommand: npm ci --include=dev && npx playwright install chromium && npm run build
     startCommand: npm start
     plan: starter
     autoDeploy: true
@@ -14,10 +14,6 @@ services:
         value: Dispositions Form Automation
       - key: APP_FORM_URL
         value: https://docs.google.com/forms/d/e/1FAIpQLSeElvHr-D5FXndyGFdk5VrcNKprY_wakDRGlmNJytjInZRaUA/viewform
-      - key: PORT
-        value: "10000"
-      - key: APP_BASE_URL
-        sync: false
       - key: DEFAULT_MODE
         value: DRY_RUN
       - key: DEBUG_SLOW_MO_MS
@@ -26,8 +22,8 @@ services:
         value: "2"
       - key: MAX_BATCH_ROWS
         value: "50"
-      - key: MONGODB_URI  
-        value: mongodb://edunexus:slYq9Z4Z55KJW5io@ac-3f9ahqg-shard-00-00.k39gw70.mongodb.net:27017,ac-3f9ahqg-shard-00-01.k39gw70.mongodb.net:27017,ac-3f9ahqg-shard-00-02.k39gw70.mongodb.net:27017/Blackbuck?ssl=true&replicaSet=atlas-qkrf0i-shard-0&authSource=admin&appName=Cluster0
+      - key: MONGODB_URI
+        sync: false
       - key: MONGODB_DB_NAME
         value: dispositions_form_automation
       - key: AUTH_SESSION_KEY

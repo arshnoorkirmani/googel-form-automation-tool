@@ -19,16 +19,22 @@ async function ensureIndexes(
   collection: Collection<RunRecordDocument>
 ): Promise<void> {
   if (!globalThis.__historyIndexesPromise__) {
-    globalThis.__historyIndexesPromise__ = collection.createIndexes([
-      {
-        key: { operatorId: 1, createdAt: -1 } as IndexDescription["key"],
-        name: "operatorId_createdAt_desc"
-      },
-      {
-        key: { operatorId: 1, status: 1, createdAt: -1 } as IndexDescription["key"],
-        name: "operatorId_status_createdAt_desc"
-      }
-    ]).then(() => undefined);
+    globalThis.__historyIndexesPromise__ = collection
+      .createIndexes([
+        {
+          key: { operatorId: 1, createdAt: -1 } as IndexDescription["key"],
+          name: "operatorId_createdAt_desc"
+        },
+        {
+          key: { operatorId: 1, status: 1, createdAt: -1 } as IndexDescription["key"],
+          name: "operatorId_status_createdAt_desc"
+        }
+      ])
+      .then(() => undefined)
+      .catch((error) => {
+        globalThis.__historyIndexesPromise__ = undefined;
+        throw error;
+      });
   }
 
   await globalThis.__historyIndexesPromise__;

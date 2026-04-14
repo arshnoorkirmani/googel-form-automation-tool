@@ -1,5 +1,10 @@
 import { cookies } from "next/headers";
 
+import {
+  badRequestError,
+  preconditionRequiredError
+} from "@/server/errors/app-error";
+
 export const OPERATOR_COOKIE_NAME = "operator_email";
 
 export type OperatorContext = {
@@ -21,7 +26,7 @@ export function buildOperatorContext(email: string): OperatorContext {
   const normalizedEmail = normalizeOperatorEmail(email);
 
   if (!isValidOperatorEmail(normalizedEmail)) {
-    throw new Error("Use a valid @blackbuck.com operator email.");
+    throw badRequestError("Use a valid @blackbuck.com operator email.");
   }
 
   return {
@@ -49,7 +54,7 @@ export async function requireOperatorContext(): Promise<OperatorContext> {
   const operator = await getOptionalOperatorContext();
 
   if (!operator) {
-    throw new Error(
+    throw preconditionRequiredError(
       "Operator identity is not configured. Open Settings and set your @blackbuck.com email first."
     );
   }

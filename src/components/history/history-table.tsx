@@ -11,7 +11,7 @@ export function HistoryTable({ history }: HistoryTableProps) {
     return (
       <EmptyState
         title="No run history yet"
-        description="Once operators start dry runs or submissions, they will appear here with logs and artifact paths."
+        description="Once operators start dry runs or submissions, persisted run records will appear here."
       />
     );
   }

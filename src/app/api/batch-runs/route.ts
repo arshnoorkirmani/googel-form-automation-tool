@@ -5,6 +5,8 @@ import { batchSubmissionSchema } from "@/modules/submission/batch.schema";
 import { authService } from "@/server/auth/auth-service";
 import { authSetupManager } from "@/server/auth/auth-setup-manager";
 import { batchAutomationRunner } from "@/server/automation/batch-runner";
+import { conflictError } from "@/server/errors/app-error";
+import { createErrorResponse } from "@/server/http/route-response";
 import { requireOperatorContext } from "@/server/operator/operator-context";
 import { batchHistoryRepository } from "@/server/runs/batch-history-repository";
 import { runQueue } from "@/server/runs/run-queue";
@@ -18,24 +20,16 @@ export async function POST(request: Request) {
     const operator = await requireOperatorContext();
 
     if (authSetupManager.getActiveSession(operator.operatorId)) {
-      return NextResponse.json(
-        {
-          error:
-            "Login setup is still in progress. Finish the auth setup flow before starting a run."
-        },
-        { status: 409 }
+      throw conflictError(
+        "Login setup is still in progress. Finish the auth setup flow before starting a run."
       );
     }
 
     const authStatus = await authService.getStatus(operator, true);
     if (authStatus.state !== "VALID") {
-      return NextResponse.json(
-        {
-          error:
-            authStatus.reason ??
-            "Re-auth required. Complete login setup before starting a run."
-        },
-        { status: 409 }
+      throw conflictError(
+        authStatus.reason ??
+          "Re-auth required. Complete login setup before starting a run."
       );
     }
 
@@ -55,11 +49,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ batchRun }, { status: 201 });
   } catch (error) {
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Failed to create batch array."
-      },
-      { status: 400 }
-    );
+    return createErrorResponse(error);
   }
 }

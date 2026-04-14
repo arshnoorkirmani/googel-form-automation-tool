@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
 
+import {
+  badRequestError,
+  conflictError,
+  notFoundError
+} from "@/server/errors/app-error";
+import { createErrorResponse } from "@/server/http/route-response";
 import { requireOperatorContext } from "@/server/operator/operator-context";
 import { batchHistoryRepository } from "@/server/runs/batch-history-repository";
 import { batchStore } from "@/server/runs/batch-store";
@@ -23,15 +29,11 @@ export async function POST(
         operator.operatorId
       );
       if (!persisted) {
-        return NextResponse.json({ error: "Batch not found" }, { status: 404 });
+        throw notFoundError("Batch not found.");
       }
 
-      return NextResponse.json(
-        {
-          error:
-            "Batch exists in persisted history, but it is not active in memory and cannot be controlled anymore."
-        },
-        { status: 409 }
+      throw conflictError(
+        "Batch exists in persisted history, but it is not active in memory and cannot be controlled anymore."
       );
     }
 
@@ -47,15 +49,12 @@ export async function POST(
         updatedRun = batchStore.requestStop(batchId);
         break;
       default:
-        return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+        throw badRequestError("Invalid action.");
     }
 
     await batchHistoryRepository.upsert(updatedRun);
     return NextResponse.json({ batchRun: updatedRun }, { status: 200 });
   } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to perform batch action." },
-      { status: 400 }
-    );
+    return createErrorResponse(error);
   }
 }

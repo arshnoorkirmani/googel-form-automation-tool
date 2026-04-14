@@ -19,7 +19,7 @@ Production-style Next.js + Playwright automation for the restricted Google Form,
   - screenshots
   - JSON run reports
   - JSONL file logs
-- Render deployment is supported through `Dockerfile`, `render.yaml`, `/api/health`, and environment-based config.
+- Render deployment is supported through `render.yaml`, `/api/health`, and environment-based config.
 
 ## Current Storage Strategy
 
@@ -142,32 +142,32 @@ It does not migrate screenshots, logs, or other bulky artifacts.
 
 ## Render Deployment
 
-This repo deploys to Render as a **native Node.js web service** (not Docker).
+This repo deploys to Render as a **native Node.js web service**.
 Playwright's Chromium is installed during the build step via `npx playwright install chromium`.
 
 ### Dual-Branch Strategy
 
 | Branch | Storage | Auth session | Playwright browsers |
 |---|---|---|---|
-| `local-stable` | Local files | Local `.sessions/` | Local headful (GUI) |
+| `local-stable` | MongoDB-backed persistence with optional local artifacts | MongoDB | Local headful (GUI) |
 | `render-production` | **MongoDB** | **MongoDB** | Headless with `--no-sandbox` |
 
 ### Files Used For Render
 
 - `render.yaml` — service definition (env, build/start commands, env vars)
 - `src/app/api/health/route.ts` — health check at `/api/health`
-- `docker/Dockerfile` — retained for future use (Docker/worker scenarios); **not the active Render path**
 
 ### Render Setup Steps
 
 1. Connect this repository to Render as a **Node** web service.
 2. Render will use `render.yaml` automatically (or configure manually).
-   - **Build Command:** `npm install && npx playwright install chromium && npm run build`
+   - **Build Command:** `npm ci --include=dev && npx playwright install chromium && npm run build`
    - **Start Command:** `npm start`
 3. Set the required environment variables in Render Dashboard:
    - `MONGODB_URI` — your Atlas or Render-hosted MongoDB connection string
+     - Supports both `mongodb+srv://...` and direct `mongodb://host1,host2,...` formats
+     - Prefer a direct host list if the runtime reports `querySrv` DNS errors
    - `MONGODB_DB_NAME` — e.g. `dispositions_form_automation`
-   - `APP_BASE_URL` — public URL of your Render service (e.g. `https://your-app.onrender.com`)
    - `AUTH_INTERACTIVE_SETUP_ENABLED=false`
 4. File persistence is **automatically disabled** when `NODE_ENV=production` — no extra config needed.
 5. Use `/api/health` as the health check path.
@@ -249,6 +249,6 @@ scripts/
   migrate-local-storage-to-mongodb.ts
   prepare-storage.ts
 docker/
-  Dockerfile           ← retained for Docker/worker use; not active
+  Dockerfile           ← legacy path; not used for the active Render deployment
 render.yaml            ← native Node.js Render service config
 ```

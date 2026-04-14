@@ -224,22 +224,31 @@ export function SubmissionForm() {
         }
 
         pollerRef.current = window.setInterval(async () => {
-          const latest = await apiClient.getRun(created.run.id);
+          try {
+            const latest = await apiClient.getRun(created.run.id);
 
-          if (!latest.run) {
-            return;
-          }
-
-          setActiveRun(latest.run);
-
-          if (
-            latest.run.status === "SUCCEEDED" ||
-            latest.run.status === "FAILED"
-          ) {
-            if (pollerRef.current) {
-              window.clearInterval(pollerRef.current);
-              pollerRef.current = null;
+            if (!latest.run) {
+              return;
             }
+
+            setActiveRun(latest.run);
+            setRunError(null);
+
+            if (
+              latest.run.status === "SUCCEEDED" ||
+              latest.run.status === "FAILED"
+            ) {
+              if (pollerRef.current) {
+                window.clearInterval(pollerRef.current);
+                pollerRef.current = null;
+              }
+            }
+          } catch (error) {
+            setRunError(
+              error instanceof Error
+                ? error.message
+                : "Could not refresh run status."
+            );
           }
         }, 1500);
       } catch (error) {

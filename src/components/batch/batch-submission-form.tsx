@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition } from "react";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 
 import { CommonFieldsSection } from "@/components/submission/common-fields-section";
@@ -96,6 +95,17 @@ export function BatchSubmissionForm({
         setOperator(operatorResult.operator);
         setAuthStatus(authResult.status);
       })
+      .catch((error) => {
+        if (!mounted) {
+          return;
+        }
+
+        setRunError(
+          error instanceof Error
+            ? error.message
+            : "Could not load operator or auth status."
+        );
+      })
       .finally(() => {
         if (mounted) {
           setAuthLoading(false);
@@ -181,17 +191,7 @@ export function BatchSubmissionForm({
 
     startTransition(async () => {
       try {
-        const response = await fetch("/api/batch-runs", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(parsed.data),
-        });
-
-        if (!response.ok) {
-           const err = await response.json();
-           throw new Error(err.error || "Failed to start batch");
-        }
-        const created = await response.json();
+        const created = await apiClient.createBatchRun(parsed.data);
         onBatchCreated(created.batchRun);
         setRunError(null);
       } catch (error) {

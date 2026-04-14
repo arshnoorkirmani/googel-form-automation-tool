@@ -25,16 +25,22 @@ async function ensureIndexes(
   collection: Collection<BatchRunRecordDocument>
 ): Promise<void> {
   if (!globalThis.__batchHistoryIndexesPromise__) {
-    globalThis.__batchHistoryIndexesPromise__ = collection.createIndexes([
-      {
-        key: { operatorId: 1, startedAt: -1 } as IndexDescription["key"],
-        name: "operatorId_startedAt_desc"
-      },
-      {
-        key: { operatorId: 1, status: 1, startedAt: -1 } as IndexDescription["key"],
-        name: "operatorId_status_startedAt_desc"
-      }
-    ]).then(() => undefined);
+    globalThis.__batchHistoryIndexesPromise__ = collection
+      .createIndexes([
+        {
+          key: { operatorId: 1, startedAt: -1 } as IndexDescription["key"],
+          name: "operatorId_startedAt_desc"
+        },
+        {
+          key: { operatorId: 1, status: 1, startedAt: -1 } as IndexDescription["key"],
+          name: "operatorId_status_startedAt_desc"
+        }
+      ])
+      .then(() => undefined)
+      .catch((error) => {
+        globalThis.__batchHistoryIndexesPromise__ = undefined;
+        throw error;
+      });
   }
 
   await globalThis.__batchHistoryIndexesPromise__;

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
+import { notFoundError } from "@/server/errors/app-error";
 import { historyRepository } from "@/server/history/history-repository";
+import { createErrorResponse } from "@/server/http/route-response";
 import { requireOperatorContext } from "@/server/operator/operator-context";
 import { runStore } from "@/server/runs/run-store";
 
@@ -11,17 +13,21 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ runId: string }> }
 ) {
-  const { runId } = await context.params;
-  const operator = await requireOperatorContext();
-  const inMemory = runStore.get(runId);
-  const run =
-    inMemory?.operatorId === operator.operatorId
-      ? inMemory
-      : await historyRepository.getById(runId, operator.operatorId);
+  try {
+    const { runId } = await context.params;
+    const operator = await requireOperatorContext();
+    const inMemory = runStore.get(runId);
+    const run =
+      inMemory?.operatorId === operator.operatorId
+        ? inMemory
+        : await historyRepository.getById(runId, operator.operatorId);
 
-  if (!run) {
-    return NextResponse.json({ error: "Run not found." }, { status: 404 });
+    if (!run) {
+      throw notFoundError("Run not found.");
+    }
+
+    return NextResponse.json({ run });
+  } catch (error) {
+    return createErrorResponse(error);
   }
-
-  return NextResponse.json({ run });
 }

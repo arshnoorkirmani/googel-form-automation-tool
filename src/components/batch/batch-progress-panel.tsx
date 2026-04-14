@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { apiClient } from "@/lib/api/client";
 import type { BatchRunRecord, BatchItemRecord } from "@/server/runs/batch-store";
 import { delaySecondsToFormsPerMinute } from "@/lib/utils/timing";
 
@@ -21,6 +22,7 @@ export function BatchProgressPanel({
   const [screenshotModal, setScreenshotModal] = useState<string | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isRetryingAll, setIsRetryingAll] = useState(false);
+  const [serverMessage, setServerMessage] = useState<string | null>(null);
   const [actionPending, setActionPending] = useState<
     "PAUSE" | "RESUME" | "STOP" | null
   >(null);
@@ -35,26 +37,29 @@ export function BatchProgressPanel({
       }
       inFlightRef.current = true;
       try {
-        const response = await fetch(`/api/batch-runs/${batchId}`);
-        if (response.ok) {
-          const { batchRun } = await response.json();
-          if (batchRun) {
-            setActiveRun(batchRun);
+        const { batchRun } = await apiClient.getBatchRun(batchId);
+        setServerMessage(null);
 
-            if (
-              batchRun.status === "COMPLETED" ||
-              batchRun.status === "FAILED" ||
-              batchRun.status === "STOPPED"
-            ) {
-              if (pollerRef.current) {
-                window.clearInterval(pollerRef.current);
-                pollerRef.current = null;
-              }
+        if (batchRun) {
+          setActiveRun(batchRun);
+
+          if (
+            batchRun.status === "COMPLETED" ||
+            batchRun.status === "FAILED" ||
+            batchRun.status === "STOPPED"
+          ) {
+            if (pollerRef.current) {
+              window.clearInterval(pollerRef.current);
+              pollerRef.current = null;
             }
           }
         }
-      } catch {
-        // ignore network error
+      } catch (error) {
+        setServerMessage(
+          error instanceof Error
+            ? error.message
+            : "Could not refresh batch status."
+        );
       } finally {
         inFlightRef.current = false;
       }
@@ -96,14 +101,13 @@ export function BatchProgressPanel({
     if (!activeRun) return;
     try {
       setIsRetrying(true);
-      await fetch(`/api/batch-runs/${activeRun.batchId}/retry`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemIds: [foNumber] })
-      });
-      // the poller will pick up the RUNNING state
-    } catch {
-      // Handle error visually if necessary
+      const result = await apiClient.retryBatchItems(activeRun.batchId, [foNumber]);
+      setActiveRun(result.batchRun);
+      setServerMessage(null);
+    } catch (error) {
+      setServerMessage(
+        error instanceof Error ? error.message : "Could not retry this row."
+      );
     } finally {
       setIsRetrying(false);
     }
@@ -113,13 +117,15 @@ export function BatchProgressPanel({
     if (!activeRun || itemIds.length === 0) return;
     try {
       setIsRetryingAll(true);
-      await fetch(`/api/batch-runs/${activeRun.batchId}/retry`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemIds })
-      });
-    } catch {
-      // ignore
+      const result = await apiClient.retryBatchItems(activeRun.batchId, itemIds);
+      setActiveRun(result.batchRun);
+      setServerMessage(null);
+    } catch (error) {
+      setServerMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not retry the failed rows."
+      );
     } finally {
       setIsRetryingAll(false);
     }
@@ -128,14 +134,14 @@ export function BatchProgressPanel({
   const handleAction = async (action: "PAUSE" | "RESUME" | "STOP") => {
     if (!activeRun) return;
     try {
-       setActionPending(action);
-       await fetch(`/api/batch-runs/${activeRun.batchId}/action`, {
-         method: "POST",
-         headers: { "Content-Type": "application/json" },
-         body: JSON.stringify({ action })
-       });
-    } catch {
-      // ignore
+      setActionPending(action);
+      const result = await apiClient.performBatchAction(activeRun.batchId, action);
+      setActiveRun(result.batchRun);
+      setServerMessage(null);
+    } catch (error) {
+      setServerMessage(
+        error instanceof Error ? error.message : "Could not update batch state."
+      );
     } finally {
       setActionPending(null);
     }
@@ -170,7 +176,9 @@ export function BatchProgressPanel({
   if (!activeRun) {
     return (
       <div className="rounded-2xl border border-line bg-surface p-10 shadow-panel flex items-center justify-center">
-        <p className="text-sm text-muted animate-pulse">Loading batch status…</p>
+        <p className="text-sm text-muted">
+          {serverMessage ?? "Loading batch status..."}
+        </p>
       </div>
     );
   }
@@ -273,10 +281,16 @@ export function BatchProgressPanel({
         ) : null}
 
         {activeRun.errorMessage && (
-           <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-             Critical Error: {activeRun.errorMessage}
-           </p>
+          <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+            Critical Error: {activeRun.errorMessage}
+          </p>
         )}
+
+        {serverMessage ? (
+          <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            {serverMessage}
+          </p>
+        ) : null}
 
         <div className="mt-6 overflow-hidden rounded-xl border border-line">
            <table className="w-full text-left text-sm">

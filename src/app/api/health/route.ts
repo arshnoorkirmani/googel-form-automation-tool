@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { configService } from "@/server/config/config-service";
+import { toAppError } from "@/server/errors/app-error";
 import { pingMongo } from "@/server/database/mongodb";
 
 export const runtime = "nodejs";
@@ -24,11 +25,16 @@ export async function GET() {
       }
     });
   } catch (error) {
+    const appError = toAppError(error);
+
     return NextResponse.json(
       {
         status: "degraded",
-        error:
-          error instanceof Error ? error.message : "Health checks could not complete."
+        error: appError.message,
+        retryable: appError.retryable,
+        checks: {
+          mongodb: "unavailable"
+        }
       },
       { status: 503 }
     );

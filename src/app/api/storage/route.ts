@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { getOptionalOperatorContext } from "@/server/operator/operator-context";
+import { badRequestError } from "@/server/errors/app-error";
+import { createErrorResponse } from "@/server/http/route-response";
 import {
   storageService,
   type ClearAction
@@ -10,9 +12,13 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const operator = await getOptionalOperatorContext();
-  const summary = await storageService.getSummary(operator);
-  return NextResponse.json({ summary });
+  try {
+    const operator = await getOptionalOperatorContext();
+    const summary = await storageService.getSummary(operator);
+    return NextResponse.json({ summary });
+  } catch (error) {
+    return createErrorResponse(error);
+  }
 }
 
 export async function POST(request: Request) {
@@ -21,10 +27,7 @@ export async function POST(request: Request) {
     const action = payload.action;
 
     if (!action) {
-      return NextResponse.json(
-        { error: "Missing storage action." },
-        { status: 400 }
-      );
+      throw badRequestError("Missing storage action.");
     }
 
     const operator = await getOptionalOperatorContext();
@@ -32,11 +35,6 @@ export async function POST(request: Request) {
     const summary = await storageService.getSummary(operator);
     return NextResponse.json({ summary });
   } catch (error) {
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Failed to clear storage."
-      },
-      { status: 400 }
-    );
+    return createErrorResponse(error);
   }
 }

@@ -4,6 +4,10 @@ import { chromium } from "playwright";
 import { authSessionRepository } from "@/server/auth/auth-session-repository";
 import { authService } from "@/server/auth/auth-service";
 import { configService } from "@/server/config/config-service";
+import {
+  conflictError,
+  preconditionRequiredError
+} from "@/server/errors/app-error";
 import { createLogger } from "@/server/logging/logger";
 import {
   normalizeOperatorEmail,
@@ -42,7 +46,7 @@ class AuthSetupManager {
     const config = await configService.getConfig();
 
     if (!config.auth.interactiveSetupEnabled || process.env.NODE_ENV === "production" || process.env.RENDER) {
-      throw new Error(
+      throw preconditionRequiredError(
         "Interactive login setup is disabled in this cloud environment. Please run the app locally on your computer to sign in. Once signed in locally, your session will be securely saved to MongoDB and automatically used by the cloud server."
       );
     }
@@ -102,7 +106,7 @@ class AuthSetupManager {
     const active = this.getActiveSession(operator.operatorId);
 
     if (!active) {
-      throw new Error("No login setup window is active.");
+      throw conflictError("No login setup window is active.");
     }
 
     const config = await configService.getConfig();
@@ -110,7 +114,7 @@ class AuthSetupManager {
     const result = await sessionValidator.validateFormAccess(active.page);
 
     if (result.state !== "VALID") {
-      throw new Error(result.reason);
+      throw conflictError(result.reason);
     }
 
     const storageState = await active.context.storageState();
@@ -119,7 +123,7 @@ class AuthSetupManager {
       : undefined;
 
     if (detectedEmail && detectedEmail !== operator.operatorId) {
-      throw new Error(
+      throw conflictError(
         `The signed-in Google account (${detectedEmail}) does not match the configured operator (${operator.email}).`
       );
     }

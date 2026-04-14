@@ -1,12 +1,11 @@
 import { MongoClient, type Db } from "mongodb";
 
 import { configService } from "@/server/config/config-service";
+import { dependencyUnavailableError } from "@/server/errors/app-error";
 
 declare global {
   // eslint-disable-next-line no-var
   var __mongoClientPromise__: Promise<MongoClient> | undefined;
-  // eslint-disable-next-line no-var
-  var __mongoDbPromise__: Promise<Db> | undefined;
 }
 
 async function createMongoClient(): Promise<MongoClient> {
@@ -14,8 +13,10 @@ async function createMongoClient(): Promise<MongoClient> {
   const uri = config.mongodb.uri;
 
   if (!uri) {
-    throw new Error(
-      "MONGODB_URI is required for persisted auth state, history, and batch records."
+    throw dependencyUnavailableError(
+      "MongoDB is not configured. Set MONGODB_URI before using persisted auth, history, or batch data.",
+      undefined,
+      false
     );
   }
 
@@ -28,24 +29,25 @@ async function createMongoClient(): Promise<MongoClient> {
   return client;
 }
 
+function resetMongoClientPromise(): void {
+  globalThis.__mongoClientPromise__ = undefined;
+}
+
 export async function getMongoClient(): Promise<MongoClient> {
   if (!globalThis.__mongoClientPromise__) {
-    globalThis.__mongoClientPromise__ = createMongoClient();
+    globalThis.__mongoClientPromise__ = createMongoClient().catch((error) => {
+      resetMongoClientPromise();
+      throw error;
+    });
   }
 
   return globalThis.__mongoClientPromise__;
 }
 
 export async function getMongoDb(): Promise<Db> {
-  if (!globalThis.__mongoDbPromise__) {
-    globalThis.__mongoDbPromise__ = (async () => {
-      const config = await configService.getConfig();
-      const client = await getMongoClient();
-      return client.db(config.mongodb.dbName);
-    })();
-  }
-
-  return globalThis.__mongoDbPromise__;
+  const config = await configService.getConfig();
+  const client = await getMongoClient();
+  return client.db(config.mongodb.dbName);
 }
 
 export async function pingMongo(): Promise<void> {

@@ -2,35 +2,11 @@
 
 import { useEffect, useState } from "react";
 
-type StorageSummary = {
-  historyEntries: number;
-  historyStore: "MONGODB";
-  logFiles: number;
-  logPersistenceEnabled: boolean;
-  artifactFiles: number;
-  artifactRuns: number;
-  artifactPersistenceEnabled: boolean;
-  screenshotPersistenceEnabled: boolean;
-  reportPersistenceEnabled: boolean;
-  sampleFiles: number;
-  authSessionPresent: boolean;
-  authMetadataPresent: boolean;
-  authStore: "MONGODB";
-  operatorConfigured?: boolean;
-  configPresent: boolean;
-  batchRunsInMemory: number;
-  batchRunsPersisted: number;
-  batchHasActiveRun: boolean;
-};
-
-type ClearAction =
-  | "CLEAR_HISTORY"
-  | "CLEAR_LOGS"
-  | "CLEAR_ARTIFACTS"
-  | "CLEAR_SAMPLES"
-  | "CLEAR_BATCH"
-  | "CLEAR_NON_AUTH"
-  | "CLEAR_AUTH";
+import { apiClient } from "@/lib/api/client";
+import type {
+  ClearAction,
+  StorageSummary
+} from "@/server/storage/storage-service";
 
 export function DataManagementView() {
   const [summary, setSummary] = useState<StorageSummary | null>(null);
@@ -41,11 +17,15 @@ export function DataManagementView() {
   const loadSummary = async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/storage");
-      if (response.ok) {
-        const data = await response.json();
-        setSummary(data.summary);
-      }
+      const data = await apiClient.getStorageSummary();
+      setSummary(data.summary);
+      setMessage(null);
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not load storage summary."
+      );
     } finally {
       setLoading(false);
     }
@@ -81,17 +61,7 @@ export function DataManagementView() {
     setMessage(null);
 
     try {
-      const response = await fetch("/api/storage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action })
-      });
-
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.error ?? "Failed to clear data.");
-      }
-
+      const payload = await apiClient.clearStorage(action);
       setSummary(payload.summary);
       setMessage("Action completed successfully.");
     } catch (error) {

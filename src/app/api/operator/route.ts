@@ -5,6 +5,7 @@ import {
   getOptionalOperatorContext,
   OPERATOR_COOKIE_NAME
 } from "@/server/operator/operator-context";
+import { createErrorResponse } from "@/server/http/route-response";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,13 +34,7 @@ export async function POST(request: Request) {
     response.cookies.set(OPERATOR_COOKIE_NAME, operator.email, buildCookieOptions());
     return response;
   } catch (error) {
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Could not save operator identity."
-      },
-      { status: 400 }
-    );
+    return createErrorResponse(error);
   }
 }
 
