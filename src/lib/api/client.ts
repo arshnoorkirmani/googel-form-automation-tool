@@ -13,6 +13,9 @@ export type OperatorIdentity = {
   email: string;
 };
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+const GET_REQUEST_ATTEMPTS = 2;
+
 type ApiErrorResponse = {
   error?:
     | string
@@ -23,40 +26,113 @@ type ApiErrorResponse = {
       };
 };
 
-function extractErrorMessage(
+class ApiClientError extends Error {
+  readonly statusCode?: number;
+  readonly retryable: boolean;
+
+  constructor(
+    message: string,
+    options: { statusCode?: number; retryable?: boolean } = {}
+  ) {
+    super(message);
+    this.name = "ApiClientError";
+    this.statusCode = options.statusCode;
+    this.retryable = options.retryable ?? false;
+  }
+}
+
+function extractApiError(
   payload: ApiErrorResponse | null,
   status: number
-): string {
+): ApiClientError {
   if (!payload?.error) {
-    return `Request failed with ${status}`;
+    return new ApiClientError(`Request failed with ${status}`, {
+      statusCode: status
+    });
   }
 
   if (typeof payload.error === "string") {
-    return payload.error;
+    return new ApiClientError(payload.error, {
+      statusCode: status,
+      retryable: status >= 500
+    });
   }
 
-  return payload.error.message ?? `Request failed with ${status}`;
+  return new ApiClientError(payload.error.message ?? `Request failed with ${status}`, {
+    statusCode: status,
+    retryable: payload.error.retryable ?? status >= 500
+  });
 }
 
 async function requestJson<T>(
   input: string,
   init?: RequestInit
 ): Promise<T> {
-  const response = await fetch(input, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {})
-    },
-    cache: "no-store"
-  });
+  const method = init?.method?.toUpperCase() ?? "GET";
+  const attemptCount = method === "GET" ? GET_REQUEST_ATTEMPTS : 1;
+  let lastError: unknown;
 
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as ApiErrorResponse | null;
-    throw new Error(extractErrorMessage(payload, response.status));
+  for (let attempt = 1; attempt <= attemptCount; attempt += 1) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(
+      () => controller.abort("request-timeout"),
+      DEFAULT_REQUEST_TIMEOUT_MS
+    );
+
+    try {
+      const response = await fetch(input, {
+        ...init,
+        headers: {
+          "Content-Type": "application/json",
+          ...(init?.headers ?? {})
+        },
+        cache: "no-store",
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as ApiErrorResponse | null;
+        throw extractApiError(payload, response.status);
+      }
+
+      return (await response.json()) as T;
+    } catch (error) {
+      if (error instanceof ApiClientError) {
+        lastError = error;
+        if (attempt < attemptCount && error.retryable) {
+          continue;
+        }
+        throw error;
+      }
+
+      if (error instanceof DOMException && error.name === "AbortError") {
+        lastError = new ApiClientError(
+          "The request timed out while contacting the server. Please retry.",
+          {
+            statusCode: 504,
+            retryable: true
+          }
+        );
+      } else if (error instanceof TypeError) {
+        lastError = new ApiClientError(
+          "The server could not be reached. Check the network connection and try again.",
+          {
+            retryable: true
+          }
+        );
+      } else {
+        lastError = error;
+      }
+
+      if (attempt >= attemptCount) {
+        throw lastError;
+      }
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 
-  return (await response.json()) as T;
+  throw lastError ?? new ApiClientError("The request could not be completed.");
 }
 
 export const apiClient = {

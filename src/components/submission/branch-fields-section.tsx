@@ -9,8 +9,7 @@ import {
 import {
   INTERESTED_OPTIONS,
   NOT_INTERESTED_OPTIONS,
-  PLAN_PITCHED_OPTIONS,
-  type SubmissionFormValues
+  PLAN_PITCHED_OPTIONS
 } from "@/modules/submission/submission.types";
 
 type BranchFieldsSectionProps = {

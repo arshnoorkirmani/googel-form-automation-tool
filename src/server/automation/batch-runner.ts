@@ -101,19 +101,6 @@ class BatchAutomationRunner {
         );
 
         try {
-          await ensurePage();
-
-          if (needsFullNavigation) {
-            await page.goto(config.formUrl, {
-              waitUntil: "domcontentloaded",
-              timeout: 60_000
-            });
-            const validation = await sessionValidator.validateFormAccess(page);
-            if (validation.state !== "VALID") {
-              throw new ReAuthRequiredError(validation.reason);
-            }
-          }
-
           const singleFormPayload: SubmissionPayload = {
             ...submission,
             foNumber,
@@ -121,9 +108,63 @@ class BatchAutomationRunner {
             // The typing issue here is because submission.callStatus allows "Random Unsupported"
           };
 
-          await fillCommonPage(page, singleFormPayload);
-          await fillBranchPage(page, singleFormPayload);
-          const remarksResult = await fillRemarksPage(page, singleFormPayload);
+          let remarksResult:
+            | {
+                confirmationMessage: string;
+                submitted: boolean;
+              }
+            | undefined;
+
+          await withRetries(
+            async () => {
+              await ensurePage();
+              const currentPage = page;
+
+              if (!currentPage) {
+                throw new Error("Browser page was not available for batch processing.");
+              }
+
+              if (needsFullNavigation) {
+                await currentPage.goto(config.formUrl, {
+                  waitUntil: "domcontentloaded",
+                  timeout: 60_000
+                });
+                const validation = await sessionValidator.validateFormAccess(
+                  currentPage
+                );
+                if (validation.state !== "VALID") {
+                  throw new ReAuthRequiredError(validation.reason);
+                }
+              }
+
+              await fillCommonPage(currentPage, singleFormPayload);
+              await fillBranchPage(currentPage, singleFormPayload);
+              remarksResult = await fillRemarksPage(currentPage, singleFormPayload);
+            },
+            Math.max(1, config.maxRetries),
+            async (attempt, error) => {
+              await logger.warn("batch.item.retry", {
+                batchId,
+                foNumber,
+                attempt,
+                error: error instanceof Error ? error.message : String(error)
+              });
+              needsFullNavigation = true;
+
+              if (page && !page.isClosed()) {
+                await page.close().catch(() => undefined);
+              }
+              page = null;
+            }
+          );
+
+          if (!remarksResult) {
+            throw new Error("Batch submission did not produce a confirmation state.");
+          }
+
+          if (!page) {
+            throw new Error("Browser page was not available after batch retries.");
+          }
 
           const screenshotPath = await artifactService.captureScreenshot(
             page,
@@ -170,8 +211,14 @@ class BatchAutomationRunner {
           const itemErrorMessage = itemError instanceof Error ? itemError.message : "Unknown item error";
           let itemScreenshotPath: string | undefined;
           try {
-             itemScreenshotPath = await artifactService.captureScreenshot(page, batchId, `error-${foNumber}`);
-          } catch(e) {}
+            if (page) {
+              itemScreenshotPath = await artifactService.captureScreenshot(
+                page,
+                batchId,
+                `error-${foNumber}`
+              );
+            }
+          } catch {}
 
           await this.persistCurrentBatch(
             batchStore.setItemFailed(

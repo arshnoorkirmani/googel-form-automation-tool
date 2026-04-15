@@ -2,10 +2,7 @@ import type { FieldErrors, UseFormRegister } from "react-hook-form";
 
 import { FieldError } from "@/components/shared/field-error";
 import { CALL_STATUS_UI_OPTIONS } from "@/modules/submission/submission.support";
-import {
-  OMC_OPTIONS,
-  type SubmissionFormValues
-} from "@/modules/submission/submission.types";
+import { OMC_OPTIONS } from "@/modules/submission/submission.types";
 
 type CommonFieldsSectionProps = {
   register: UseFormRegister<any>;

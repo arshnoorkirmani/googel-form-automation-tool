@@ -1,4 +1,3 @@
-import { type RunRecord } from "@/server/runs/run-types";
 import { type BatchSubmissionPayload } from "@/modules/submission/batch.schema";
 
 export type BatchItemStatus = "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED";

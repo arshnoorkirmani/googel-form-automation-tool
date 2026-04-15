@@ -1,13 +1,11 @@
 # ──────────────────────────────────────────────────────
-# Docker build — kept for future use (worker separation,
-# scaling, or local containerised runs).
+# Docker build for Render and optional local containerised runs.
 #
 # NOTE: Requires output: "standalone" in next.config.ts.
-# This is NOT the active deployment path for Render.
-# See render.yaml for the native Node.js deployment.
+# render.yaml points Render at this Dockerfile.
 # ──────────────────────────────────────────────────────
 
-FROM mcr.microsoft.com/playwright:v1.59.1-noble AS deps
+FROM mcr.microsoft.com/playwright:v1.51.0-noble AS deps
 
 WORKDIR /app
 
@@ -21,20 +19,20 @@ WORKDIR /app
 COPY . .
 RUN npm run build
 
-FROM mcr.microsoft.com/playwright:v1.59.1-noble AS runner
+FROM mcr.microsoft.com/playwright:v1.51.0-noble AS runner
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
 ENV PORT=10000
+ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/config ./config
-COPY --from=builder /app/storage ./storage
 
-EXPOSE 3000
+EXPOSE 10000
 
 CMD ["node", "server.js"]

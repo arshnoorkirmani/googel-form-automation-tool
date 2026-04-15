@@ -110,6 +110,22 @@ Important:
 
 The app still does not store credentials and still relies on a manually created Google session.
 
+### What Is Stored In MongoDB
+
+- `authSessionMetadata`: operator-scoped session status, saved timestamps, validation timestamps, and detected Google account email
+- `authSessionStates`: operator-scoped Playwright `storageState` payload used to reopen the browser context after restarts
+
+### How Sessions Survive Restarts
+
+- Render restarts do not clear MongoDB, so the saved operator-specific `storageState` survives container replacement
+- On startup, the app recreates a Playwright browser context from MongoDB instead of relying on local session files
+
+### How Session Recovery Works
+
+- If the saved session is still valid, the app reuses it automatically for runs and batch jobs
+- If validation fails, the operator sees a re-auth requirement and must refresh the session from a trusted local workstation
+- The cloud runtime never tries to open an interactive Google sign-in window
+
 ### Local / Trusted Workstation
 
 - Keep `AUTH_INTERACTIVE_SETUP_ENABLED=true`
@@ -142,8 +158,8 @@ It does not migrate screenshots, logs, or other bulky artifacts.
 
 ## Render Deployment
 
-This repo deploys to Render as a **native Node.js web service**.
-Playwright's Chromium is installed during the build step via `npx playwright install chromium`.
+This repo deploys to Render as a **Docker-based web service**.
+That is the safer production path for Playwright because the browser runtime and OS-level dependencies are built into the image instead of depending on the host environment.
 
 ### Dual-Branch Strategy
 
@@ -154,15 +170,16 @@ Playwright's Chromium is installed during the build step via `npx playwright ins
 
 ### Files Used For Render
 
-- `render.yaml` — service definition (env, build/start commands, env vars)
-- `src/app/api/health/route.ts` — health check at `/api/health`
+- `render.yaml` - Render Blueprint service definition for the Docker web service
+- `docker/Dockerfile` - production image used by Render and optional local container runs
+- `src/app/api/health/route.ts` - health check at `/api/health`
 
 ### Render Setup Steps
 
-1. Connect this repository to Render as a **Node** web service.
-2. Render will use `render.yaml` automatically (or configure manually).
-   - **Build Command:** `npm ci --include=dev && npx playwright install chromium && npm run build`
-   - **Start Command:** `npm start`
+1. Connect this repository to Render and create a **Blueprint/Docker** web service.
+2. Render will use `render.yaml` automatically.
+   - Runtime: `docker`
+   - Dockerfile: `./docker/Dockerfile`
 3. Set the required environment variables in Render Dashboard:
    - `MONGODB_URI` — your Atlas or Render-hosted MongoDB connection string
      - Supports both `mongodb+srv://...` and direct `mongodb://host1,host2,...` formats
@@ -180,7 +197,7 @@ Playwright's Chromium is installed during the build step via `npx playwright ins
 
 - `NODE_ENV=production` forces off all local file writes (logs, screenshots, reports) in code — not just by env vars
 - Local directory creation is skipped on Render
-- Playwright runs headless with `--no-sandbox --disable-setuid-sandbox` flags
+- Playwright runs inside the Docker image with its required browser dependencies packaged into the deploy artifact
 - Interactive browser setup is disabled
 - All MongoDB records are scoped by `operatorId` (user email) — per-user isolation enforced
 
@@ -249,6 +266,6 @@ scripts/
   migrate-local-storage-to-mongodb.ts
   prepare-storage.ts
 docker/
-  Dockerfile           ← legacy path; not used for the active Render deployment
+  Dockerfile           ← maintained optional container path
 render.yaml            ← native Node.js Render service config
 ```

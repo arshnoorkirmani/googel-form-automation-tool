@@ -3,6 +3,9 @@ import { MongoClient, type Db } from "mongodb";
 import { configService } from "@/server/config/config-service";
 import { dependencyUnavailableError } from "@/server/errors/app-error";
 
+const MONGO_CONNECT_RETRIES = 2;
+const MONGO_RETRY_DELAY_MS = 750;
+
 declare global {
   // eslint-disable-next-line no-var
   var __mongoClientPromise__: Promise<MongoClient> | undefined;
@@ -22,11 +25,29 @@ async function createMongoClient(): Promise<MongoClient> {
 
   const client = new MongoClient(uri, {
     appName: config.appName,
-    serverSelectionTimeoutMS: 10_000
+    serverSelectionTimeoutMS: 10_000,
+    connectTimeoutMS: 10_000,
+    socketTimeoutMS: 20_000
   });
 
-  await client.connect();
-  return client;
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= MONGO_CONNECT_RETRIES; attempt += 1) {
+    try {
+      await client.connect();
+      return client;
+    } catch (error) {
+      lastError = error;
+
+      if (attempt < MONGO_CONNECT_RETRIES) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, MONGO_RETRY_DELAY_MS * attempt)
+        );
+      }
+    }
+  }
+
+  throw lastError;
 }
 
 function resetMongoClientPromise(): void {

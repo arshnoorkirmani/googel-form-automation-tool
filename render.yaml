@@ -1,12 +1,13 @@
 services:
   - type: web
     name: dispositions-form-automation
-    env: node
-    buildCommand: npm ci --include=dev && npx playwright install chromium && npm run build
-    startCommand: npm start
+    runtime: docker
+    dockerfilePath: ./docker/Dockerfile
+    dockerContext: .
     plan: starter
-    autoDeploy: true
+    autoDeployTrigger: commit
     healthCheckPath: /api/health
+    maxShutdownDelaySeconds: 60
     envVars:
       - key: NODE_ENV
         value: production

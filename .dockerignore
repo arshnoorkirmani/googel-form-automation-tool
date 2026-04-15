@@ -1,0 +1,13 @@
+.git
+.github
+.next
+node_modules
+storage/auth
+storage/history
+storage/artifacts
+storage/logs
+.env
+.env.local
+*.log
+coverage
+tsconfig.tsbuildinfo
