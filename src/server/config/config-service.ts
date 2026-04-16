@@ -1,7 +1,8 @@
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { sanitizeFileName, toAbsolutePath } from "@/lib/utils/path";
+import { sanitizeFileName } from "@/lib/utils/file-name";
+import { toAbsolutePath } from "@/lib/utils/path";
 import {
   RUN_MODES,
   type RunMode
@@ -37,6 +38,9 @@ export type AppConfig = Omit<RawAppConfig, "paths"> & {
     logFilesEnabled: boolean;
     screenshotsEnabled: boolean;
     runReportsEnabled: boolean;
+    mongodbLogsEnabled: boolean;
+    mongodbScreenshotsEnabled: boolean;
+    mongodbRunReportsEnabled: boolean;
   };
   paths: {
     logsDir: string;
@@ -144,6 +148,7 @@ class ConfigService {
     const raw = await readFile(configPath, "utf8");
     const parsed = JSON.parse(raw) as RawAppConfig;
     const appName = process.env.APP_NAME?.trim() || parsed.appName;
+    const mongodbUri = readMongoUriEnv();
 
     const resolved: AppConfig = {
       ...parsed,
@@ -173,7 +178,7 @@ class ConfigService {
         sessionKey: process.env.AUTH_SESSION_KEY?.trim() || "default"
       },
       mongodb: {
-        uri: readMongoUriEnv(),
+        uri: mongodbUri,
         dbName:
           process.env.MONGODB_DB_NAME?.trim() || defaultDatabaseName(appName)
       },
@@ -186,7 +191,15 @@ class ConfigService {
           : readBooleanEnv("PERSIST_SCREENSHOTS", false),
         runReportsEnabled: isProduction
           ? false
-          : readBooleanEnv("PERSIST_RUN_REPORTS", false)
+          : readBooleanEnv("PERSIST_RUN_REPORTS", false),
+        mongodbLogsEnabled:
+          Boolean(mongodbUri) && readBooleanEnv("MONGODB_PERSIST_LOGS", true),
+        mongodbScreenshotsEnabled:
+          Boolean(mongodbUri) &&
+          readBooleanEnv("MONGODB_PERSIST_SCREENSHOTS", isProduction),
+        mongodbRunReportsEnabled:
+          Boolean(mongodbUri) &&
+          readBooleanEnv("MONGODB_PERSIST_RUN_REPORTS", isProduction)
       },
       paths: {
         logsDir: toAbsolutePath(parsed.paths.logsDir),

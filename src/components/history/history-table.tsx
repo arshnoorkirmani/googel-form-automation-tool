@@ -1,5 +1,9 @@
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusBadge } from "@/components/shared/status-badge";
+import {
+  formatArtifactReference,
+  resolveArtifactUrl
+} from "@/lib/utils/artifact-reference";
 import type { RunRecord } from "@/server/runs/run-types";
 
 type HistoryTableProps = {
@@ -43,11 +47,43 @@ export function HistoryTable({ history }: HistoryTableProps) {
               </td>
               <td className="px-4 py-3 text-xs text-muted">
                 {row.artifacts.screenshotPath ? (
-                  <div>{row.artifacts.screenshotPath}</div>
+                  <div>
+                    <a
+                      className="text-blue-600 hover:underline"
+                      href={resolveArtifactUrl(row.artifacts.screenshotPath) ?? "#"}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {formatArtifactReference(row.artifacts.screenshotPath)}
+                    </a>
+                  </div>
                 ) : (
                   <div>No screenshot</div>
                 )}
-                {row.artifacts.logFilePath ? <div>{row.artifacts.logFilePath}</div> : null}
+                {row.artifacts.reportPath ? (
+                  <div>
+                    <a
+                      className="text-blue-600 hover:underline"
+                      href={resolveArtifactUrl(row.artifacts.reportPath) ?? "#"}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {formatArtifactReference(row.artifacts.reportPath)}
+                    </a>
+                  </div>
+                ) : null}
+                {row.artifacts.logFilePath ? (
+                  <div>
+                    <a
+                      className="text-blue-600 hover:underline"
+                      href={resolveArtifactUrl(row.artifacts.logFilePath) ?? "#"}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {formatArtifactReference(row.artifacts.logFilePath)}
+                    </a>
+                  </div>
+                ) : null}
               </td>
             </tr>
           ))}

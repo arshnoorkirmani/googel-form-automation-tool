@@ -1,4 +1,8 @@
 import { StatusBadge } from "@/components/shared/status-badge";
+import {
+  formatArtifactReference,
+  resolveArtifactUrl
+} from "@/lib/utils/artifact-reference";
 import type { RunRecord } from "@/server/runs/run-types";
 
 type RunProgressPanelProps = {
@@ -63,12 +67,49 @@ export function RunProgressPanel({ run }: RunProgressPanelProps) {
         </p>
       ) : null}
 
-      {run.artifacts.screenshotPath || run.artifacts.logFilePath ? (
+      {run.artifacts.screenshotPath ||
+      run.artifacts.reportPath ||
+      run.artifacts.logFilePath ? (
         <div className="mt-5 space-y-1 text-xs text-muted">
           {run.artifacts.screenshotPath ? (
-            <p>Screenshot: {run.artifacts.screenshotPath}</p>
+            <p>
+              Screenshot:{" "}
+              <a
+                className="text-blue-600 hover:underline"
+                href={resolveArtifactUrl(run.artifacts.screenshotPath) ?? "#"}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {formatArtifactReference(run.artifacts.screenshotPath)}
+              </a>
+            </p>
           ) : null}
-          {run.artifacts.logFilePath ? <p>Log: {run.artifacts.logFilePath}</p> : null}
+          {run.artifacts.reportPath ? (
+            <p>
+              Report:{" "}
+              <a
+                className="text-blue-600 hover:underline"
+                href={resolveArtifactUrl(run.artifacts.reportPath) ?? "#"}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {formatArtifactReference(run.artifacts.reportPath)}
+              </a>
+            </p>
+          ) : null}
+          {run.artifacts.logFilePath ? (
+            <p>
+              Log:{" "}
+              <a
+                className="text-blue-600 hover:underline"
+                href={resolveArtifactUrl(run.artifacts.logFilePath) ?? "#"}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {formatArtifactReference(run.artifacts.logFilePath)}
+              </a>
+            </p>
+          ) : null}
         </div>
       ) : null}
     </section>

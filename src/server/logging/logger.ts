@@ -1,13 +1,16 @@
 import { appendFile } from "node:fs/promises";
 import path from "node:path";
 
+import { buildLogStreamReference } from "@/lib/utils/artifact-reference";
+import { sanitizeFileName } from "@/lib/utils/file-name";
 import { configService } from "@/server/config/config-service";
+import { logEntryRepository } from "@/server/logging/log-entry-repository";
 
 export type LogLevel = "INFO" | "WARN" | "ERROR";
 
 export type LogContext = Record<string, unknown>;
 
-type LogEntry = {
+export type LogEntry = {
   timestamp: string;
   level: LogLevel;
   runId?: string;
@@ -15,8 +18,15 @@ type LogEntry = {
   context?: LogContext;
 };
 
+type StructuredLoggerOptions = {
+  operatorId?: string;
+};
+
 export class StructuredLogger {
-  constructor(private readonly runId?: string) {}
+  constructor(
+    private readonly runId?: string,
+    private readonly options: StructuredLoggerOptions = {}
+  ) {}
 
   async info(event: string, context?: LogContext): Promise<void> {
     await this.write("INFO", event, context);
@@ -33,15 +43,29 @@ export class StructuredLogger {
   async getLogFilePath(): Promise<string | undefined> {
     const config = await configService.getConfig();
 
+    if (config.persistence.mongodbLogsEnabled) {
+      return buildLogStreamReference(this.getStreamId());
+    }
+
     if (!config.persistence.logFilesEnabled) {
       return undefined;
     }
 
+    return this.getLocalLogFilePath(config.paths.logsDir);
+  }
+
+  private getStreamId(): string {
+    return sanitizeFileName(
+      this.runId ?? `system-${new Date().toISOString().slice(0, 10)}`
+    );
+  }
+
+  private getLocalLogFilePath(logsDir: string): string {
     const fileName = this.runId
       ? `${this.runId}.jsonl`
       : `${new Date().toISOString().slice(0, 10)}.jsonl`;
 
-    return path.join(config.paths.logsDir, fileName);
+    return path.join(logsDir, fileName);
   }
 
   private async write(
@@ -58,16 +82,27 @@ export class StructuredLogger {
     };
 
     const serialized = `${JSON.stringify(entry)}\n`;
-    const logFilePath = await this.getLogFilePath();
+    const config = await configService.getConfig();
 
-    if (logFilePath) {
-      await appendFile(logFilePath, serialized, "utf8");
+    if (config.persistence.logFilesEnabled) {
+      await appendFile(this.getLocalLogFilePath(config.paths.logsDir), serialized, "utf8");
+    }
+
+    if (config.persistence.mongodbLogsEnabled) {
+      await logEntryRepository.append({
+        streamId: this.getStreamId(),
+        operatorId: this.options.operatorId,
+        entry
+      });
     }
 
     process.stdout.write(serialized);
   }
 }
 
-export function createLogger(runId?: string): StructuredLogger {
-  return new StructuredLogger(runId);
+export function createLogger(
+  runId?: string,
+  options?: StructuredLoggerOptions
+): StructuredLogger {
+  return new StructuredLogger(runId, options);
 }

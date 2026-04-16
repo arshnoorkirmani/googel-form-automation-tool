@@ -35,7 +35,7 @@ class BatchAutomationRunner {
     submission: BatchSubmissionPayload,
     operator: OperatorContext
   ): Promise<void> {
-    const logger = createLogger(batchId);
+    const logger = createLogger(batchId, { operatorId: operator.operatorId });
     const config = await configService.getConfig();
     let session: BrowserSession | null = null;
     let page: Page | null = null;
@@ -169,7 +169,8 @@ class BatchAutomationRunner {
           const screenshotPath = await artifactService.captureScreenshot(
             page,
             batchId,
-            `success-${foNumber}`
+            `success-${foNumber}`,
+            operator.operatorId
           );
 
           await this.persistCurrentBatch(
@@ -215,7 +216,8 @@ class BatchAutomationRunner {
               itemScreenshotPath = await artifactService.captureScreenshot(
                 page,
                 batchId,
-                `error-${foNumber}`
+                `error-${foNumber}`,
+                operator.operatorId
               );
             }
           } catch {}
@@ -300,9 +302,9 @@ class BatchAutomationRunner {
       if (record.status === "PAUSING" || record.status === "PAUSED") {
         if (!paused) {
           if (record.status === "PAUSING") {
-            batchStore.setBatchPaused(batchId);
+            await this.persistCurrentBatch(batchStore.setBatchPaused(batchId));
           }
-          batchStore.clearWaiting(batchId);
+          await this.persistCurrentBatch(batchStore.clearWaiting(batchId));
           paused = true;
         }
         await new Promise((resolve) => setTimeout(resolve, 500));
@@ -311,16 +313,21 @@ class BatchAutomationRunner {
 
       if (paused) {
         paused = false;
+        await this.persistCurrentBatch(
+          batchStore.setWaiting(batchId, remainingMs / 1000, new Date())
+        );
+      } else if (!record.waitingUntil) {
+        await this.persistCurrentBatch(
+          batchStore.setWaiting(batchId, remainingMs / 1000, new Date())
+        );
       }
 
       const chunkMs = Math.min(remainingMs, 500);
-      const now = new Date();
-      batchStore.setWaiting(batchId, remainingMs / 1000, now);
       await new Promise((resolve) => setTimeout(resolve, chunkMs));
       remainingMs -= chunkMs;
     }
 
-    batchStore.clearWaiting(batchId);
+    await this.persistCurrentBatch(batchStore.clearWaiting(batchId));
   }
 
   private async persistCurrentBatch(record: BatchRunRecord): Promise<void> {

@@ -19,6 +19,7 @@ Production-style Next.js + Playwright automation for the restricted Google Form,
   - screenshots
   - JSON run reports
   - JSONL file logs
+- Render-safe persistence can store screenshots, reports, and log streams in MongoDB instead of the ephemeral container filesystem.
 - Render deployment is supported through `render.yaml`, `/api/health`, and environment-based config.
 
 ## Current Storage Strategy
@@ -40,9 +41,9 @@ Production-style Next.js + Playwright automation for the restricted Google Form,
 
 ### No Longer Stored By Default
 
-- Screenshots
-- JSON run reports
-- JSONL log files
+- File-based screenshots
+- File-based JSON run reports
+- File-based JSONL log files
 - Legacy local auth/history JSON files
 
 ## High-Level Architecture
@@ -82,6 +83,9 @@ Important:
 - `PERSIST_LOG_FILES=false`
 - `PERSIST_SCREENSHOTS=false`
 - `PERSIST_RUN_REPORTS=false`
+- `MONGODB_PERSIST_LOGS=true` on Render
+- `MONGODB_PERSIST_SCREENSHOTS=true` on Render when you want screenshot evidence preserved
+- `MONGODB_PERSIST_RUN_REPORTS=true` on Render when you want JSON reports preserved
 
 ## Local Development
 
@@ -114,6 +118,8 @@ The app still does not store credentials and still relies on a manually created 
 
 - `authSessionMetadata`: operator-scoped session status, saved timestamps, validation timestamps, and detected Google account email
 - `authSessionStates`: operator-scoped Playwright `storageState` payload used to reopen the browser context after restarts
+- `runtimeLogs`: structured JSON log entries grouped by run/batch stream
+- `runtimeArtifacts`: screenshots and JSON reports captured during execution
 
 ### How Sessions Survive Restarts
 
@@ -186,7 +192,7 @@ That is the safer production path for Playwright because the browser runtime and
      - Prefer a direct host list if the runtime reports `querySrv` DNS errors
    - `MONGODB_DB_NAME` — e.g. `dispositions_form_automation`
    - `AUTH_INTERACTIVE_SETUP_ENABLED=false`
-4. File persistence is **automatically disabled** when `NODE_ENV=production` — no extra config needed.
+4. File persistence is **automatically disabled** when `NODE_ENV=production`, while MongoDB persistence can stay enabled through `MONGODB_PERSIST_*` flags.
 5. Use `/api/health` as the health check path.
 6. **Bootstrap the Google session locally first:**
    - Run the app locally with `AUTH_INTERACTIVE_SETUP_ENABLED=true` and the same `MONGODB_URI`
@@ -196,6 +202,7 @@ That is the safer production path for Playwright because the browser runtime and
 ### Production Safety Guarantees
 
 - `NODE_ENV=production` forces off all local file writes (logs, screenshots, reports) in code — not just by env vars
+- MongoDB-backed screenshots, reports, and log streams survive container restarts when `MONGODB_PERSIST_*` flags are enabled
 - Local directory creation is skipped on Render
 - Playwright runs inside the Docker image with its required browser dependencies packaged into the deploy artifact
 - Interactive browser setup is disabled

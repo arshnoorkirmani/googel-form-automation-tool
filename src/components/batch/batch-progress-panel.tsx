@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { apiClient } from "@/lib/api/client";
+import { resolveArtifactUrl } from "@/lib/utils/artifact-reference";
 import type { BatchRunRecord, BatchItemRecord } from "@/server/runs/batch-store";
 import { delaySecondsToFormsPerMinute } from "@/lib/utils/timing";
 
@@ -324,12 +325,14 @@ export function BatchProgressPanel({
                           {item.status === "RUNNING" && "Processing..."}
                        </td>
                        <td className="px-4 py-3 text-right space-x-2">
-                          {item.screenshotPath && (
+                          {resolveArtifactUrl(item.screenshotPath) && (
                              <button 
                                className="text-xs text-blue-600 hover:underline"
-                               onClick={() => setScreenshotModal(
-                                 "/api/artifacts/" + item.screenshotPath?.split("artifacts").pop()?.replace(/\\/g, "/")
-                               )}
+                               onClick={() =>
+                                 setScreenshotModal(
+                                   resolveArtifactUrl(item.screenshotPath)
+                                 )
+                               }
                              >
                                 Image
                              </button>

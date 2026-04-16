@@ -3,8 +3,9 @@ import path from "node:path";
 
 import type { Page } from "playwright";
 
-import { sanitizeFileName } from "@/lib/utils/path";
+import { sanitizeFileName } from "@/lib/utils/file-name";
 import { configService } from "@/server/config/config-service";
+import { runtimeArtifactRepository } from "@/server/reports/runtime-artifact-repository";
 
 class ArtifactService {
   async ensureRunDirectory(runId: string): Promise<string> {
@@ -17,37 +18,84 @@ class ArtifactService {
   async captureScreenshot(
     page: Page,
     runId: string,
-    name: string
+    name: string,
+    operatorId?: string
   ): Promise<string | undefined> {
     const config = await configService.getConfig();
-    if (!config.persistence.screenshotsEnabled) {
+    const fileName = `${sanitizeFileName(name)}-${Date.now()}.png`;
+
+    if (
+      !config.persistence.screenshotsEnabled &&
+      !config.persistence.mongodbScreenshotsEnabled
+    ) {
       return undefined;
     }
 
-    const runDirectory = await this.ensureRunDirectory(runId);
-    const filePath = path.join(
-      runDirectory,
-      `${sanitizeFileName(name)}-${Date.now()}.png`
+    const screenshotBuffer = Buffer.from(
+      await page.screenshot({
+        fullPage: true
+      })
     );
+    let localFilePath: string | undefined;
 
-    await page.screenshot({ path: filePath, fullPage: true });
-    return filePath;
+    if (config.persistence.screenshotsEnabled) {
+      const runDirectory = await this.ensureRunDirectory(runId);
+      localFilePath = path.join(runDirectory, fileName);
+      await writeFile(localFilePath, screenshotBuffer);
+    }
+
+    if (config.persistence.mongodbScreenshotsEnabled) {
+      return runtimeArtifactRepository.create({
+        operatorId,
+        runId,
+        kind: "SCREENSHOT",
+        fileName,
+        mimeType: "image/png",
+        content: screenshotBuffer
+      });
+    }
+
+    return localFilePath;
   }
 
   async writeJsonArtifact(
     runId: string,
     name: string,
-    payload: unknown
+    payload: unknown,
+    operatorId?: string
   ): Promise<string | undefined> {
     const config = await configService.getConfig();
-    if (!config.persistence.runReportsEnabled) {
+    const fileName = `${sanitizeFileName(name)}.json`;
+
+    if (
+      !config.persistence.runReportsEnabled &&
+      !config.persistence.mongodbRunReportsEnabled
+    ) {
       return undefined;
     }
 
-    const runDirectory = await this.ensureRunDirectory(runId);
-    const filePath = path.join(runDirectory, `${sanitizeFileName(name)}.json`);
-    await writeFile(filePath, JSON.stringify(payload, null, 2), "utf8");
-    return filePath;
+    const serialized = JSON.stringify(payload, null, 2);
+    const content = Buffer.from(serialized, "utf8");
+    let localFilePath: string | undefined;
+
+    if (config.persistence.runReportsEnabled) {
+      const runDirectory = await this.ensureRunDirectory(runId);
+      localFilePath = path.join(runDirectory, fileName);
+      await writeFile(localFilePath, serialized, "utf8");
+    }
+
+    if (config.persistence.mongodbRunReportsEnabled) {
+      return runtimeArtifactRepository.create({
+        operatorId,
+        runId,
+        kind: "REPORT",
+        fileName,
+        mimeType: "application/json; charset=utf-8",
+        content
+      });
+    }
+
+    return localFilePath;
   }
 }
 

@@ -4,7 +4,9 @@ import path from "node:path";
 import { authSessionRepository } from "@/server/auth/auth-session-repository";
 import { configService } from "@/server/config/config-service";
 import { historyRepository } from "@/server/history/history-repository";
+import { logEntryRepository } from "@/server/logging/log-entry-repository";
 import type { OperatorContext } from "@/server/operator/operator-context";
+import { runtimeArtifactRepository } from "@/server/reports/runtime-artifact-repository";
 import { batchHistoryRepository } from "@/server/runs/batch-history-repository";
 import { batchStore } from "@/server/runs/batch-store";
 
@@ -12,12 +14,16 @@ type StorageSummary = {
   historyEntries: number;
   historyStore: "MONGODB";
   logFiles: number;
+  logStore: "MONGODB";
   logPersistenceEnabled: boolean;
+  logFileMirroringEnabled: boolean;
   artifactFiles: number;
   artifactRuns: number;
+  artifactStore: "MONGODB";
   artifactPersistenceEnabled: boolean;
   screenshotPersistenceEnabled: boolean;
   reportPersistenceEnabled: boolean;
+  artifactFileMirroringEnabled: boolean;
   sampleFiles: number;
   authSessionPresent: boolean;
   authMetadataPresent: boolean;
@@ -124,19 +130,22 @@ class StorageService {
     const samplesDir = config.paths.samplesDir;
     const configPath = path.resolve(process.cwd(), "config", "app.config.json");
 
-    const logFiles = await countFiles(logsDir, {
+    const mirroredLogFiles = await countFiles(logsDir, {
       excludeNames: [".gitkeep"]
     });
-    const artifactFiles = await countFiles(artifactsDir, {
+    const mirroredArtifactFiles = await countFiles(artifactsDir, {
       recursive: true,
       excludeNames: [".gitkeep"]
     });
-    const artifactRuns = await countDirectories(artifactsDir, {
+    const mirroredArtifactRuns = await countDirectories(artifactsDir, {
       excludeNames: [".gitkeep"]
     });
     const sampleFiles = await countFiles(samplesDir, {
       excludeNames: [".gitkeep"]
     });
+    const persistedLogStreams = await logEntryRepository.countStreams();
+    const persistedArtifacts = await runtimeArtifactRepository.count();
+    const persistedArtifactRuns = await runtimeArtifactRepository.countRuns();
 
     const batchRuns = operator
       ? batchStore.listByOperator(operator.operatorId)
@@ -151,14 +160,27 @@ class StorageService {
     return {
       historyEntries: operator ? await historyRepository.count(operator.operatorId) : 0,
       historyStore: "MONGODB",
-      logFiles,
-      logPersistenceEnabled: config.persistence.logFilesEnabled,
-      artifactFiles,
-      artifactRuns,
+      logFiles: persistedLogStreams || mirroredLogFiles,
+      logStore: "MONGODB",
+      logPersistenceEnabled: config.persistence.mongodbLogsEnabled,
+      logFileMirroringEnabled: config.persistence.logFilesEnabled,
+      artifactFiles: persistedArtifacts || mirroredArtifactFiles,
+      artifactRuns: persistedArtifactRuns || mirroredArtifactRuns,
+      artifactStore: "MONGODB",
       artifactPersistenceEnabled:
-        config.persistence.screenshotsEnabled || config.persistence.runReportsEnabled,
-      screenshotPersistenceEnabled: config.persistence.screenshotsEnabled,
-      reportPersistenceEnabled: config.persistence.runReportsEnabled,
+        config.persistence.mongodbScreenshotsEnabled ||
+        config.persistence.mongodbRunReportsEnabled ||
+        config.persistence.screenshotsEnabled ||
+        config.persistence.runReportsEnabled,
+      screenshotPersistenceEnabled:
+        config.persistence.mongodbScreenshotsEnabled ||
+        config.persistence.screenshotsEnabled,
+      reportPersistenceEnabled:
+        config.persistence.mongodbRunReportsEnabled ||
+        config.persistence.runReportsEnabled,
+      artifactFileMirroringEnabled:
+        config.persistence.screenshotsEnabled ||
+        config.persistence.runReportsEnabled,
       sampleFiles,
       authSessionPresent: operator
         ? await authSessionRepository.hasStorageState(operator)
@@ -190,11 +212,17 @@ class StorageService {
     }
 
     if (action === "CLEAR_LOGS" || action === "CLEAR_NON_AUTH") {
-      await clearDirectory(config.paths.logsDir, { excludeNames: [".gitkeep"] });
+      await Promise.all([
+        logEntryRepository.clear(),
+        clearDirectory(config.paths.logsDir, { excludeNames: [".gitkeep"] })
+      ]);
     }
 
     if (action === "CLEAR_ARTIFACTS" || action === "CLEAR_NON_AUTH") {
-      await clearDirectory(config.paths.artifactsDir, { excludeNames: [".gitkeep"] });
+      await Promise.all([
+        runtimeArtifactRepository.clear(),
+        clearDirectory(config.paths.artifactsDir, { excludeNames: [".gitkeep"] })
+      ]);
     }
 
     if (action === "CLEAR_SAMPLES" || action === "CLEAR_NON_AUTH") {

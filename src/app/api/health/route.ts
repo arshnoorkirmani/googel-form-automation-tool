@@ -20,8 +20,17 @@ export async function GET() {
           ? "enabled"
           : "disabled",
         fileLogs: config.persistence.logFilesEnabled ? "enabled" : "disabled",
-        screenshots: config.persistence.screenshotsEnabled ? "enabled" : "disabled",
-        runReports: config.persistence.runReportsEnabled ? "enabled" : "disabled"
+        mongodbLogs: config.persistence.mongodbLogsEnabled ? "enabled" : "disabled",
+        screenshots:
+          config.persistence.mongodbScreenshotsEnabled ||
+          config.persistence.screenshotsEnabled
+            ? "enabled"
+            : "disabled",
+        runReports:
+          config.persistence.mongodbRunReportsEnabled ||
+          config.persistence.runReportsEnabled
+            ? "enabled"
+            : "disabled"
       }
     });
   } catch (error) {

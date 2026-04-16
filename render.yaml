@@ -31,6 +31,12 @@ services:
         value: default
       - key: AUTH_INTERACTIVE_SETUP_ENABLED
         value: "false"
+      - key: MONGODB_PERSIST_LOGS
+        value: "true"
+      - key: MONGODB_PERSIST_SCREENSHOTS
+        value: "true"
+      - key: MONGODB_PERSIST_RUN_REPORTS
+        value: "true"
       - key: PERSIST_LOG_FILES
         value: "false"
       - key: PERSIST_SCREENSHOTS

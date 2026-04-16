@@ -20,21 +20,35 @@ import type { RunRecord } from "@/server/runs/run-types";
 import type { OperatorContext } from "@/server/operator/operator-context";
 
 class AutomationRunner {
+  private async persistRun(runId: string): Promise<RunRecord> {
+    const record = runStore.get(runId);
+
+    if (!record) {
+      throw new Error(`Run ${runId} was not found in memory.`);
+    }
+
+    await historyRepository.append(record);
+    return record;
+  }
+
   async execute(
     runId: string,
     submission: SubmissionPayload,
     operator: OperatorContext
   ): Promise<RunRecord> {
-    const logger = createLogger(runId);
+    const logger = createLogger(runId, { operatorId: operator.operatorId });
     const config = await configService.getConfig();
     let session: BrowserSession | null = null;
     let page: Page | null = null;
 
+    await this.persistRun(runId);
     runStore.setRunning(runId);
+    await this.persistRun(runId);
 
     try {
       await authService.assertValidSession(operator);
       runStore.addProgress(runId, "SESSION_LOADED", "Saved session loaded");
+      await this.persistRun(runId);
       await logger.info("run.session.loaded", {
         callStatus: submission.callStatus,
         mode: submission.mode
@@ -81,6 +95,7 @@ class AutomationRunner {
       runStore.addProgress(runId, "FORM_OPENED", "Form opened");
       runStore.addProgress(runId, "COMMON_FIELDS_FILLED", "Common fields filled");
       runStore.addProgress(runId, "BRANCH_FIELDS_FILLED", "Branch page filled");
+      await this.persistRun(runId);
 
       if (!page) {
         throw new Error("Browser page was not created.");
@@ -96,11 +111,13 @@ class AutomationRunner {
         : "Dry run completed";
 
       runStore.addProgress(runId, finalStep, finalLabel, remarksResult.confirmationMessage);
+      await this.persistRun(runId);
 
       const previewPath = await artifactService.captureScreenshot(
         page,
         runId,
-        remarksResult.submitted ? "submitted" : "dry-run-final"
+        remarksResult.submitted ? "submitted" : "dry-run-final",
+        operator.operatorId
       );
       const reportPath = await artifactService.writeJsonArtifact(
         runId,
@@ -109,7 +126,8 @@ class AutomationRunner {
           submission,
           result: remarksResult,
           completedAt: new Date().toISOString()
-        }
+        },
+        operator.operatorId
       );
 
       const logFilePath = await logger.getLogFilePath();
@@ -118,12 +136,14 @@ class AutomationRunner {
         reportPath,
         logFilePath
       });
+      await this.persistRun(runId);
 
       const succeeded = runStore.succeed(
         runId,
         remarksResult.confirmationMessage,
         remarksResult.submitted
       );
+      await this.persistRun(runId);
 
       await logger.info("run.completed", {
         submitted: remarksResult.submitted,
@@ -140,9 +160,11 @@ class AutomationRunner {
           const screenshotPath = await artifactService.captureScreenshot(
             page,
             runId,
-            "failure"
+            "failure",
+            operator.operatorId
           );
           runStore.attachArtifacts(runId, { screenshotPath });
+          await this.persistRun(runId);
         } catch {
           // Ignore secondary screenshot failures.
         }
@@ -150,6 +172,7 @@ class AutomationRunner {
 
       const failed = runStore.fail(runId, errorMessage);
       runStore.addProgress(runId, "FAILED", "Run failed", errorMessage, "failed");
+      await this.persistRun(runId);
 
       const logFilePath = await logger.getLogFilePath();
       runStore.attachArtifacts(runId, { logFilePath });
@@ -157,6 +180,7 @@ class AutomationRunner {
         error: errorMessage,
         requiresReauth: error instanceof ReAuthRequiredError
       });
+      await this.persistRun(runId);
       await historyRepository.append(runStore.get(runId) ?? failed);
 
       throw error;

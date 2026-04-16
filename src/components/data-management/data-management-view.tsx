@@ -45,7 +45,7 @@ export function DataManagementView() {
 
     if (action === "CLEAR_NON_AUTH") {
       return window.confirm(
-        "This will clear history, logs, artifacts, samples, and batch memory. Continue?"
+        "This will clear history, MongoDB log streams, stored artifacts, samples, and batch memory. Continue?"
       );
     }
 
@@ -119,12 +119,15 @@ export function DataManagementView() {
         <div className="rounded-2xl border border-line bg-surface p-5 shadow-panel">
           <h3 className="text-lg font-semibold text-text">Logs</h3>
           <p className="mt-1 text-sm text-muted">
-            {summary.logFiles} file logs in storage/logs
+            {summary.logFiles} persisted log streams in {summary.logStore.toLowerCase()}
           </p>
           <p className="mt-2 text-xs text-muted">
             {summary.logPersistenceEnabled
-              ? "File logging is enabled in addition to stdout."
-              : "File logging is disabled; Render/runtime logs stay in stdout only."}
+              ? "MongoDB log persistence is enabled."
+              : "MongoDB log persistence is disabled; stdout remains the fallback."}{" "}
+            {summary.logFileMirroringEnabled
+              ? "Local file mirroring is also enabled."
+              : "Local file mirroring is off."}
           </p>
           <button
             type="button"
@@ -139,13 +142,17 @@ export function DataManagementView() {
         <div className="rounded-2xl border border-line bg-surface p-5 shadow-panel">
           <h3 className="text-lg font-semibold text-text">Screenshots & Reports</h3>
           <p className="mt-1 text-sm text-muted">
-            {summary.artifactFiles} files across {summary.artifactRuns} runs in
-            storage/artifacts
+            {summary.artifactFiles} stored artifacts across {summary.artifactRuns} runs in{" "}
+            {summary.artifactStore.toLowerCase()}
           </p>
           <p className="mt-2 text-xs text-muted">
             {summary.artifactPersistenceEnabled
               ? `Screenshots: ${summary.screenshotPersistenceEnabled ? "on" : "off"}, JSON reports: ${summary.reportPersistenceEnabled ? "on" : "off"}`
               : "Artifact persistence is disabled by default."}
+            {" "}
+            {summary.artifactFileMirroringEnabled
+              ? "Local file mirroring is enabled."
+              : "Local file mirroring is off."}
           </p>
           <button
             type="button"
@@ -225,7 +232,7 @@ export function DataManagementView() {
               Clear All Non-Auth Data
             </h3>
             <p className="mt-1 text-sm text-muted">
-              Clears history, logs, artifacts, samples, and batch memory. Auth
+              Clears history, MongoDB logs, artifacts, samples, and batch memory. Auth
               session data is kept intact.
             </p>
           </div>
