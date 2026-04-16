@@ -20,6 +20,7 @@ export function AuthStatusCard({
   const [status, setStatus] = useState(initialStatus);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const canRunInteractiveSetup = interactiveSetupEnabled && operatorConfigured;
 
   const refresh = () =>
     startTransition(async () => {
@@ -114,11 +115,18 @@ export function AuthStatusCard({
         ) : null}
         {status.reason ? <p>{status.reason}</p> : null}
         {!interactiveSetupEnabled ? (
-          <p>
-            Interactive login setup is disabled here. Refresh or bootstrap the
-            session from a trusted local workstation that uses the same MongoDB
-            connection.
-          </p>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
+            <p className="font-medium">Cloud login setup is disabled on the live app.</p>
+            <p className="mt-1">
+              Render cannot safely open the manual Google sign-in window needed for
+              Playwright session bootstrap.
+            </p>
+            <div className="mt-3 space-y-1 text-sm">
+              <p>1. Run this same project on your local machine.</p>
+              <p>2. Use the same `MONGODB_URI`, `MONGODB_DB_NAME`, and `AUTH_SESSION_KEY`.</p>
+              <p>3. Complete Login Setup locally, then come back here and click Refresh Status.</p>
+            </div>
+          </div>
         ) : null}
         {!operatorConfigured ? (
           <p>
@@ -132,35 +140,43 @@ export function AuthStatusCard({
         <button
           type="button"
           onClick={refresh}
-          className="rounded-xl border border-line bg-surface-alt px-4 py-2 text-sm font-medium text-text"
+          className="rounded-xl border border-line bg-surface-alt px-4 py-2 text-sm font-medium text-text disabled:cursor-not-allowed disabled:opacity-60"
           disabled={isPending}
         >
           Refresh Status
         </button>
-        <button
-          type="button"
-          onClick={startSetup}
-          className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white"
-          disabled={isPending || !interactiveSetupEnabled || !operatorConfigured}
-        >
-          Start Login Setup
-        </button>
-        <button
-          type="button"
-          onClick={completeSetup}
-          className="rounded-xl border border-line bg-white px-4 py-2 text-sm font-medium text-text"
-          disabled={isPending || !interactiveSetupEnabled || !operatorConfigured}
-        >
-          Finish Login Setup
-        </button>
-        <button
-          type="button"
-          onClick={cancelSetup}
-          className="rounded-xl border border-line bg-white px-4 py-2 text-sm font-medium text-text"
-          disabled={isPending || !interactiveSetupEnabled || !operatorConfigured}
-        >
-          Cancel
-        </button>
+        {interactiveSetupEnabled ? (
+          <>
+            <button
+              type="button"
+              onClick={startSetup}
+              className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isPending || !canRunInteractiveSetup}
+            >
+              Start Login Setup
+            </button>
+            <button
+              type="button"
+              onClick={completeSetup}
+              className="rounded-xl border border-line bg-white px-4 py-2 text-sm font-medium text-text disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isPending || !canRunInteractiveSetup}
+            >
+              Finish Login Setup
+            </button>
+            <button
+              type="button"
+              onClick={cancelSetup}
+              className="rounded-xl border border-line bg-white px-4 py-2 text-sm font-medium text-text disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isPending || !canRunInteractiveSetup}
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <span className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900">
+            Login setup available only in local app
+          </span>
+        )}
       </div>
 
       {feedback ? <p className="mt-4 text-sm text-muted">{feedback}</p> : null}
