@@ -1,6 +1,6 @@
 import type { SubmissionPayload } from "@/modules/submission/submission.schema";
 
-export type BatchMode = "DRY_RUN" | "SUBMIT";
+export type BatchMode = "SUBMIT";
 
 export type BatchRow = {
   rowNumber: number;

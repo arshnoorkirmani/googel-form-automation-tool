@@ -4,6 +4,7 @@ import { FieldError } from "@/components/shared/field-error";
 import {
   getBranchTitle,
   isBranchlessCallStatus,
+  isRandomCallStatusSelection,
   isUnsupportedCallStatus
 } from "@/modules/submission/submission.support";
 import {
@@ -113,6 +114,13 @@ export function BranchFieldsSection({
         </p>
       ) : null}
 
+      {callStatus && isRandomCallStatusSelection(callStatus) ? (
+        <p className="rounded-xl border border-line bg-white px-4 py-3 text-sm text-muted">
+          Random mode uses only the allowed checkbox pool from Page 1. No extra
+          branch fields are required.
+        </p>
+      ) : null}
+
       {callStatus && isUnsupportedCallStatus(callStatus) ? (
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           {callStatus} is intentionally blocked in the MVP. Only Interested, Follow Up,
@@ -120,7 +128,9 @@ export function BranchFieldsSection({
         </p>
       ) : null}
 
-      {callStatus && isBranchlessCallStatus(callStatus) ? (
+      {callStatus &&
+      !isRandomCallStatusSelection(callStatus) &&
+      isBranchlessCallStatus(callStatus) ? (
         <p className="rounded-xl border border-line bg-white px-4 py-3 text-sm text-muted">
           No additional branch fields are required for {callStatus}. Continue to
           Remarks on Page 3.

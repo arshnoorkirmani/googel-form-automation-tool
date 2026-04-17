@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { batchHistoryRepository } from "@/server/runs/batch-history-repository";
 import { batchStore } from "@/server/runs/batch-store";
 
 export const runtime = "nodejs";
@@ -12,7 +13,15 @@ export async function POST(
     const { action } = await request.json();
     const { batchId } = await params;
 
-    if (!batchStore.get(batchId)) {
+    let existingBatch = batchStore.get(batchId);
+    if (!existingBatch) {
+      const persisted = await batchHistoryRepository.getById(batchId);
+      if (persisted) {
+        existingBatch = batchStore.hydrate(persisted);
+      }
+    }
+
+    if (!existingBatch) {
       return NextResponse.json({ error: "Batch not found" }, { status: 404 });
     }
 
@@ -31,6 +40,7 @@ export async function POST(
         return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
 
+    await batchHistoryRepository.upsert(updatedRun);
     return NextResponse.json({ batchRun: updatedRun }, { status: 200 });
   } catch (error) {
     return NextResponse.json(

@@ -14,8 +14,12 @@ class RunStore {
   private readonly store =
     globalThis.__runStore__ ?? (globalThis.__runStore__ = new Map());
 
-  create(runId: string, submission: RunRecord["submission"]): RunRecord {
-    const record = createQueuedRunRecord(runId, submission);
+  create(
+    runId: string,
+    submission: RunRecord["submission"],
+    operatorId?: string
+  ): RunRecord {
+    const record = createQueuedRunRecord(runId, submission, operatorId);
     this.store.set(runId, record);
     return record;
   }
@@ -90,12 +94,17 @@ class RunStore {
     submitted: boolean
   ): RunRecord {
     const current = this.mustGet(runId);
+    const completedAt = new Date().toISOString();
+    const startedAt = current.startedAt ?? current.createdAt;
     const updated: RunRecord = {
       ...current,
       status: "SUCCEEDED",
-      completedAt: new Date().toISOString(),
+      completedAt,
+      durationMs: Math.max(
+        0,
+        Date.parse(completedAt) - Date.parse(startedAt)
+      ),
       result: {
-        dryRun: !submitted,
         submitted,
         confirmationMessage
       }
@@ -107,10 +116,16 @@ class RunStore {
 
   fail(runId: string, errorMessage: string): RunRecord {
     const current = this.mustGet(runId);
+    const completedAt = new Date().toISOString();
+    const startedAt = current.startedAt ?? current.createdAt;
     const updated: RunRecord = {
       ...current,
       status: "FAILED",
-      completedAt: new Date().toISOString(),
+      completedAt,
+      durationMs: Math.max(
+        0,
+        Date.parse(completedAt) - Date.parse(startedAt)
+      ),
       errorMessage
     };
 

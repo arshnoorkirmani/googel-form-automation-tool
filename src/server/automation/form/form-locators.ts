@@ -1,8 +1,8 @@
-import { PAGE_LABELS } from "@/modules/submission/submission.support";
+import { currentFormDefinition } from "@/lib/forms/current-form-definition";
 
 export const FORM_BUTTONS = {
-  next: /next/i,
-  submit: /^submit$/i
+  next: currentFormDefinition.buttons.next,
+  submit: currentFormDefinition.buttons.submit
 } as const;
 
-export const GOOGLE_FORM_LABELS = PAGE_LABELS;
+export const GOOGLE_FORM_LABELS = currentFormDefinition.labels;

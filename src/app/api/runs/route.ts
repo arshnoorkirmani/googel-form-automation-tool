@@ -5,6 +5,7 @@ import { submissionSchema } from "@/modules/submission/submission.schema";
 import { authService } from "@/server/auth/auth-service";
 import { authSetupManager } from "@/server/auth/auth-setup-manager";
 import { automationRunner } from "@/server/automation/automation-runner";
+import { historyRepository } from "@/server/history/history-repository";
 import { runQueue } from "@/server/runs/run-queue";
 import { runStore } from "@/server/runs/run-store";
 
@@ -38,7 +39,8 @@ export async function POST(request: Request) {
     const payload = await request.json();
     const submission = submissionSchema.parse(payload);
     const runId = createRunId();
-    const run = runStore.create(runId, submission);
+    const run = runStore.create(runId, submission, authStatus.detectedEmail);
+    await historyRepository.append(run);
 
     runQueue.enqueue(async () => {
       try {

@@ -1,6 +1,6 @@
 import type { Page } from "playwright";
 
-import { PAGE_LABELS } from "@/modules/submission/submission.support";
+import { currentFormDefinition } from "@/lib/forms/current-form-definition";
 
 export type SessionValidationResult = {
   state: "VALID" | "REAUTH_REQUIRED" | "FORBIDDEN";
@@ -45,10 +45,9 @@ export function interpretSessionSignals(
     };
   }
 
-  const likelyFormLoaded =
-    normalizedText.includes(PAGE_LABELS.foNumber.toLowerCase()) &&
-    normalizedText.includes(PAGE_LABELS.callStatus.toLowerCase()) &&
-    normalizedText.includes(PAGE_LABELS.omc.toLowerCase());
+  const likelyFormLoaded = currentFormDefinition.sessionValidationLabels.every(
+    (label) => normalizedText.includes(label.toLowerCase())
+  );
 
   if (likelyFormLoaded) {
     return {

@@ -12,28 +12,28 @@ export async function handleInterestedBranch(
   page: Page,
   submission: SubmissionPayload
 ): Promise<void> {
-  if (
-    !submission.interestedReason ||
-    !submission.interestedNextTransaction ||
-    !submission.interestedPlanPitched
-  ) {
+  const interestedReason = submission.interestedReason;
+  const interestedNextTransaction = submission.interestedNextTransaction;
+  const interestedPlanPitched = submission.interestedPlanPitched;
+
+  if (!interestedReason || !interestedNextTransaction || !interestedPlanPitched) {
     throw new Error("Interested branch payload is incomplete.");
   }
 
   await selectDropdownQuestion(
     page,
-    PAGE_LABELS.interestedReason,
-    submission.interestedReason
+    PAGE_LABELS.interestedReason!,
+    interestedReason!
   );
   await fillDateTimeQuestion(
     page,
-    PAGE_LABELS.interestedNextTransaction,
-    submission.interestedNextTransaction
+    PAGE_LABELS.interestedNextTransaction!,
+    interestedNextTransaction!
   );
   await selectDropdownQuestion(
     page,
-    PAGE_LABELS.interestedPlanPitched,
-    submission.interestedPlanPitched
+    PAGE_LABELS.interestedPlanPitched!,
+    interestedPlanPitched!
   );
   await clickNext(page);
 }

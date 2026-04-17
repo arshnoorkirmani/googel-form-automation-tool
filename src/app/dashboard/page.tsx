@@ -2,15 +2,32 @@ export const dynamic = "force-dynamic";
 
 import { AuthStatusCard } from "@/components/dashboard/auth-status-card";
 import { RunSummaryCard } from "@/components/dashboard/run-summary-card";
-import { HistoryTable } from "@/components/history/history-table";
+import { OperationsHistoryView } from "@/components/history/operations-history-view";
 import { authService } from "@/server/auth/auth-service";
 import { authSetupManager } from "@/server/auth/auth-setup-manager";
 import { historyRepository } from "@/server/history/history-repository";
+import { batchHistoryRepository } from "@/server/runs/batch-history-repository";
+import { batchStore } from "@/server/runs/batch-store";
+import { runStore } from "@/server/runs/run-store";
 
 export default async function DashboardPage() {
-  const history = await historyRepository.list();
-  const successful = history.filter((run) => run.status === "SUCCEEDED").length;
-  const failed = history.filter((run) => run.status === "FAILED").length;
+  const [history, batchRuns] = await Promise.all([
+    historyRepository.list(),
+    batchHistoryRepository.list()
+  ]);
+  const activeRuns = runStore.listActive();
+  const activeBatches = batchStore
+    .list()
+    .filter((batch) =>
+      ["QUEUED", "RUNNING", "PAUSING", "PAUSED", "STOPPING"].includes(batch.status)
+    );
+  const todayKey = new Date().toDateString();
+  const todaysRuns = history.filter(
+    (run) => new Date(run.createdAt).toDateString() === todayKey
+  ).length;
+  const failed =
+    history.filter((run) => run.status === "FAILED").length +
+    batchRuns.filter((batch) => batch.status === "FAILED").length;
 
   const authStatus = await authService.getStatus(false);
   const initialStatus = authSetupManager.getActiveSession()
@@ -23,26 +40,24 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-3">
-        <RunSummaryCard label="Total Runs" value={String(history.length)} />
+        <RunSummaryCard label="Today's Runs" value={String(todaysRuns)} />
         <RunSummaryCard
-          label="Successful Runs"
-          value={String(successful)}
+          label="Active Work"
+          value={String(activeRuns.length + activeBatches.length)}
           tone="success"
         />
-        <RunSummaryCard label="Failed Runs" value={String(failed)} tone="danger" />
+        <RunSummaryCard label="Failed Records" value={String(failed)} tone="danger" />
       </div>
 
       <AuthStatusCard initialStatus={initialStatus} />
 
-      <section className="space-y-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-muted">
-            Recent Activity
-          </p>
-          <h2 className="mt-1 text-xl font-semibold text-text">Latest Runs</h2>
-        </div>
-        <HistoryTable history={history.slice(0, 5)} />
-      </section>
+      <OperationsHistoryView
+        submissions={history}
+        batchRuns={batchRuns}
+        activeRuns={activeRuns}
+        activeBatches={activeBatches}
+        showFilters={false}
+      />
     </div>
   );
 }

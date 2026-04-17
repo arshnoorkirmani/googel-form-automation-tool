@@ -2,6 +2,11 @@ import type { Page } from "playwright";
 
 import type { BatchSubmissionPayload } from "@/modules/submission/batch.schema";
 import type { SubmissionPayload } from "@/modules/submission/submission.schema";
+import {
+  RANDOM_CALL_STATUS_OPTIONS,
+  RANDOM_CALL_STATUS_VALUE,
+  type RandomCallStatusOption
+} from "@/modules/submission/submission.types";
 import { authService, ReAuthRequiredError } from "@/server/auth/auth-service";
 import { sessionValidator } from "@/server/auth/session-validator";
 import { browserFactory, type BrowserSession } from "@/server/automation/browser-factory";
@@ -12,19 +17,16 @@ import { withRetries } from "@/server/automation/retry";
 import { configService } from "@/server/config/config-service";
 import { createLogger } from "@/server/logging/logger";
 import { artifactService } from "@/server/reports/artifact-service";
-import { batchStore } from "@/server/runs/batch-store";
+import { batchHistoryRepository } from "@/server/runs/batch-history-repository";
+import { batchStore, type BatchRunRecord } from "@/server/runs/batch-store";
 import { waitForFormReady } from "./form/form-helpers";
 
-const RANDOM_UNSUPPORTED_OPTIONS = [
-  "Call Disconnected",
-  "Call Drop",
-  "Not Connected",
-  "Language Barrier"
-];
-
-function getRandomUnsupported() {
-  const index = Math.floor(Math.random() * RANDOM_UNSUPPORTED_OPTIONS.length);
-  return RANDOM_UNSUPPORTED_OPTIONS[index]!;
+function getRandomCallStatusFromPool(
+  allowedPool: readonly RandomCallStatusOption[]
+): RandomCallStatusOption {
+  const pool = allowedPool.length > 0 ? allowedPool : RANDOM_CALL_STATUS_OPTIONS;
+  const index = Math.floor(Math.random() * pool.length);
+  return pool[index]!;
 }
 
 class BatchAutomationRunner {
@@ -34,7 +36,7 @@ class BatchAutomationRunner {
     let session: BrowserSession | null = null;
     let page: Page | null = null;
 
-    batchStore.setBatchRunning(batchId);
+    await this.persistCurrentBatch(batchStore.setBatchRunning(batchId));
 
     try {
       await authService.assertValidSession();
@@ -70,13 +72,13 @@ class BatchAutomationRunner {
           if (!rec) break;
           
           if (rec.status === "STOPPING" || rec.status === "STOPPED") {
-            batchStore.setBatchStopped(batchId);
+            await this.persistCurrentBatch(batchStore.setBatchStopped(batchId));
             return; // Will gracefully trigger the finally block to close the browser
           }
           
           if (rec.status === "PAUSING" || rec.status === "PAUSED") {
             if (rec.status === "PAUSING") {
-              batchStore.setBatchPaused(batchId);
+              await this.persistCurrentBatch(batchStore.setBatchPaused(batchId));
             }
             await new Promise(r => setTimeout(r, 1000));
           } else {
@@ -86,11 +88,15 @@ class BatchAutomationRunner {
         // -------------------------------------------------
 
         let currentCallStatus = submission.callStatus;
-        if (currentCallStatus === "Random Unsupported") {
-          currentCallStatus = getRandomUnsupported();
+        if (currentCallStatus === RANDOM_CALL_STATUS_VALUE) {
+          currentCallStatus = getRandomCallStatusFromPool(
+            submission.randomCallStatusPool ?? RANDOM_CALL_STATUS_OPTIONS
+          );
         }
 
-        batchStore.setItemRunning(batchId, foNumber, currentCallStatus);
+        await this.persistCurrentBatch(
+          batchStore.setItemRunning(batchId, foNumber, currentCallStatus)
+        );
 
         try {
           await ensurePage();
@@ -109,8 +115,7 @@ class BatchAutomationRunner {
           const singleFormPayload: SubmissionPayload = {
             ...submission,
             foNumber,
-            callStatus: currentCallStatus as any
-            // The typing issue here is because submission.callStatus allows "Random Unsupported"
+            callStatus: currentCallStatus as SubmissionPayload["callStatus"]
           };
 
           await fillCommonPage(page, singleFormPayload);
@@ -123,12 +128,14 @@ class BatchAutomationRunner {
             `success-${foNumber}`
           );
 
-          batchStore.setItemSucceeded(
-            batchId,
-            foNumber,
-            remarksResult.confirmationMessage,
-            screenshotPath,
-            currentCallStatus
+          await this.persistCurrentBatch(
+            batchStore.setItemSucceeded(
+              batchId,
+              foNumber,
+              remarksResult.confirmationMessage,
+              screenshotPath,
+              currentCallStatus
+            )
           );
 
           // Use user-configured delay directly (seconds → ms), fallback to 10s
@@ -137,11 +144,8 @@ class BatchAutomationRunner {
             : 10;
           await this.waitWithControl(batchId, delaySec);
 
-          // Handle next loop iteration
-          if (submission.mode === "SUBMIT" && remarksResult.submitted) {
-            // Click "Submit another response"
-            // Wait for form to become ready again.
-            // On Google Forms, the link is an <a> tag pointing to the form URL.
+          // Handle next loop iteration after the live submit completes.
+          if (remarksResult.submitted) {
             const anotherResponseLink = page.locator("a", { hasText: "Submit another response" }).first();
             
             if (await anotherResponseLink.count() > 0) {
@@ -151,9 +155,6 @@ class BatchAutomationRunner {
             } else {
               needsFullNavigation = true;
             }
-          } else {
-             // In DRY_RUN, it stays on the last page. To run next, we MUST navigate.
-             needsFullNavigation = true;
           }
 
         } catch (itemError) {
@@ -163,12 +164,14 @@ class BatchAutomationRunner {
              itemScreenshotPath = await artifactService.captureScreenshot(page, batchId, `error-${foNumber}`);
           } catch(e) {}
 
-          batchStore.setItemFailed(
-            batchId,
-            foNumber,
-            itemErrorMessage,
-            itemScreenshotPath,
-            currentCallStatus
+          await this.persistCurrentBatch(
+            batchStore.setItemFailed(
+              batchId,
+              foNumber,
+              itemErrorMessage,
+              itemScreenshotPath,
+              currentCallStatus
+            )
           );
 
           // If an item failed, it is likely the form state is tangled.
@@ -189,12 +192,14 @@ class BatchAutomationRunner {
         }
       }
 
-      batchStore.setBatchCompleted(batchId);
+      await this.persistCurrentBatch(batchStore.setBatchCompleted(batchId));
       await logger.info("batch.completed", { batchId });
 
     } catch (batchError) {
       const errorMessage = batchError instanceof Error ? batchError.message : "Fail to run batch.";
-      batchStore.setBatchFailed(batchId, errorMessage);
+      await this.persistCurrentBatch(
+        batchStore.setBatchFailed(batchId, errorMessage)
+      );
       await logger.error("batch.failed", { error: errorMessage });
     } finally {
       if (session) {
@@ -230,16 +235,16 @@ class BatchAutomationRunner {
       }
 
       if (record.status === "STOPPING" || record.status === "STOPPED") {
-        batchStore.setBatchStopped(batchId);
+        await this.persistCurrentBatch(batchStore.setBatchStopped(batchId));
         return;
       }
 
       if (record.status === "PAUSING" || record.status === "PAUSED") {
         if (!paused) {
           if (record.status === "PAUSING") {
-            batchStore.setBatchPaused(batchId);
+            await this.persistCurrentBatch(batchStore.setBatchPaused(batchId));
           }
-          batchStore.clearWaiting(batchId);
+          await this.persistCurrentBatch(batchStore.clearWaiting(batchId));
           paused = true;
         }
         await new Promise((resolve) => setTimeout(resolve, 500));
@@ -252,12 +257,18 @@ class BatchAutomationRunner {
 
       const chunkMs = Math.min(remainingMs, 500);
       const now = new Date();
-      batchStore.setWaiting(batchId, remainingMs / 1000, now);
+      await this.persistCurrentBatch(
+        batchStore.setWaiting(batchId, remainingMs / 1000, now)
+      );
       await new Promise((resolve) => setTimeout(resolve, chunkMs));
       remainingMs -= chunkMs;
     }
 
-    batchStore.clearWaiting(batchId);
+    await this.persistCurrentBatch(batchStore.clearWaiting(batchId));
+  }
+
+  private async persistCurrentBatch(record: BatchRunRecord): Promise<void> {
+    await batchHistoryRepository.upsert(record);
   }
 }
 

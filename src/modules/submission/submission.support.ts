@@ -1,29 +1,17 @@
 import {
   ALL_CALL_STATUSES,
   NO_BRANCH_CALL_STATUSES,
+  RANDOM_CALL_STATUS_OPTIONS,
+  RANDOM_CALL_STATUS_VALUE,
   SUPPORTED_CALL_STATUSES,
   type CallStatus,
+  type RandomCallStatusOption,
   type SubmissionFormValues,
   UNSUPPORTED_CALL_STATUSES
 } from "@/modules/submission/submission.types";
+import { currentFormDefinition } from "@/lib/forms/current-form-definition";
 
-export const PAGE_LABELS = {
-  emailCheckbox: "Email",
-  foNumber: "FO Number",
-  callStatus: "Call Status",
-  omc: "OMC",
-  noOfTrucks: "No of Trucks",
-  fuelingPotential: "Fueling Potential",
-  fuelingFrequency: "Fueling Frequency",
-  interestedReason: "Interested",
-  interestedNextTransaction: "Next Transaction Date",
-  interestedPlanPitched: "Plan Pitched",
-  followUpNextCall: "Follow_Up-Next_Call_date",
-  followUpPlanPitched: "Follow Up - Plan Pitched",
-  callBackNextCall: "Call_Back-Next_Call_Time",
-  notInterestedReason: "Not Interested",
-  remarks: "Remarks"
-} as const;
+export const PAGE_LABELS = currentFormDefinition.labels;
 
 export const CALL_STATUS_UI_OPTIONS = ALL_CALL_STATUSES.map((status) => ({
   value: status,
@@ -32,6 +20,18 @@ export const CALL_STATUS_UI_OPTIONS = ALL_CALL_STATUSES.map((status) => ({
     status as (typeof SUPPORTED_CALL_STATUSES)[number]
   )
 }));
+
+export const RANDOM_CALL_STATUS_UI_OPTIONS = currentFormDefinition.callStatus.randomPool.options.map(
+  (status) => ({
+    value: status,
+    label: status
+  })
+);
+
+export const RANDOM_CALL_STATUS_UI_VALUE =
+  currentFormDefinition.callStatus.randomPool.value;
+export const RANDOM_CALL_STATUS_UI_LABEL =
+  currentFormDefinition.callStatus.randomPool.label;
 
 export function isSupportedCallStatus(
   value: string
@@ -57,6 +57,14 @@ export function isBranchlessCallStatus(
   );
 }
 
+export function isRandomCallStatusSelection(value: string): boolean {
+  return value === RANDOM_CALL_STATUS_VALUE;
+}
+
+export function getDefaultRandomCallStatusPool(): RandomCallStatusOption[] {
+  return [...RANDOM_CALL_STATUS_OPTIONS];
+}
+
 export function clearBranchFields(
   values: SubmissionFormValues
 ): SubmissionFormValues {
@@ -77,6 +85,10 @@ export function getBranchTitle(callStatus: CallStatus | ""): string {
     return "Branch Details";
   }
 
+  if (isRandomCallStatusSelection(callStatus)) {
+    return "Random Call Status Pool";
+  }
+
   if (isUnsupportedCallStatus(callStatus)) {
     return `${callStatus} is not supported in the MVP`;
   }
@@ -85,5 +97,11 @@ export function getBranchTitle(callStatus: CallStatus | ""): string {
     return `${callStatus} - No additional fields`;
   }
 
-  return `${callStatus} Branch Details`;
+  const branchPageId = currentFormDefinition.branching.pageByValue[callStatus];
+  const branchTitle =
+    branchPageId && currentFormDefinition.pages[branchPageId]
+      ? currentFormDefinition.pages[branchPageId].title
+      : `${callStatus} Branch Details`;
+
+  return branchTitle;
 }

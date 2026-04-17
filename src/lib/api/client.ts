@@ -1,4 +1,5 @@
 import type { SubmissionPayload } from "@/modules/submission/submission.schema";
+import type { BatchRunRecord } from "@/server/runs/batch-store";
 import type { RunRecord } from "@/server/runs/run-types";
 import type { AuthStatus } from "@/server/auth/auth-service";
 
@@ -64,6 +65,8 @@ export const apiClient = {
     return requestJson<{ run: RunRecord | null }>(`/api/runs/${runId}`);
   },
   getHistory() {
-    return requestJson<{ history: RunRecord[] }>("/api/history");
+    return requestJson<{ history: RunRecord[]; batchRuns: BatchRunRecord[] }>(
+      "/api/history"
+    );
   }
 };

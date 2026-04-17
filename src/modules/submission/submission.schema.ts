@@ -2,13 +2,19 @@ import { z } from "zod";
 
 import { isValidDateString } from "@/lib/utils/date-time";
 import {
+  ACTIVE_RUN_MODES,
   INTERESTED_OPTIONS,
   NOT_INTERESTED_OPTIONS,
   OMC_OPTIONS,
   PLAN_PITCHED_OPTIONS,
-  RUN_MODES,
   SUPPORTED_CALL_STATUSES
 } from "@/modules/submission/submission.types";
+
+const activeRunModeSchema = z.enum(ACTIVE_RUN_MODES);
+const submitOnlyModeSchema = z.preprocess(
+  (input) => (input === "DRY_RUN" || input === undefined || input === "" ? "SUBMIT" : input),
+  activeRunModeSchema
+);
 
 const dateTimeValueSchema = z.object({
   date: z
@@ -84,7 +90,7 @@ export const baseSubmissionSchema = z
     fuelingPotential: z.string().trim().min(1, "Fueling Potential is required"),
     fuelingFrequency: z.string().trim().min(1, "Fueling Frequency is required"),
     remarks: z.string().trim().min(1, "Remarks are required"),
-    mode: z.enum(RUN_MODES).default("DRY_RUN"),
+    mode: submitOnlyModeSchema.default("SUBMIT"),
     debug: z.boolean().default(false),
     interestedReason: optionalStringSelect(
       INTERESTED_OPTIONS,

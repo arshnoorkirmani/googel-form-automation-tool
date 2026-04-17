@@ -9,7 +9,10 @@ import { BranchFieldsSection } from "@/components/submission/branch-fields-secti
 import { ModeToggle } from "@/components/submission/mode-toggle";
 import { FieldError } from "@/components/shared/field-error";
 import { createDefaultSubmissionValues } from "@/modules/submission/submission.defaults";
-import { clearBranchFields } from "@/modules/submission/submission.support";
+import {
+  clearBranchFields,
+  getDefaultRandomCallStatusPool
+} from "@/modules/submission/submission.support";
 import { batchSubmissionSchema, type BatchSubmissionPayload } from "@/modules/submission/batch.schema";
 import {
   BATCH_DELAY_LIMITS,
@@ -53,7 +56,8 @@ export function BatchSubmissionForm({
     defaultValues: {
       ...createDefaultSubmissionValues(),
       foNumberInput: "",
-      delaySeconds: 10
+      delaySeconds: 10,
+      randomCallStatusPool: getDefaultRandomCallStatusPool()
     } as any
   });
 
@@ -65,6 +69,7 @@ export function BatchSubmissionForm({
 
   const watchedValues = watch();
   const callStatus = watchedValues.callStatus;
+  const selectedRandomStatuses = watchedValues.randomCallStatusPool ?? [];
   const delaySecondsRaw = watchedValues.delaySeconds;
   const delaySecondsValue = Number.isFinite(delaySecondsRaw)
     ? delaySecondsRaw
@@ -80,6 +85,7 @@ export function BatchSubmissionForm({
     const resetValues = clearBranchFields(currentValues as any);
     reset({
       ...resetValues,
+      mode: "SUBMIT",
       callStatus: nextValue as any
     });
   };
@@ -263,6 +269,8 @@ export function BatchSubmissionForm({
           callStatus={callStatus}
           onCallStatusChange={onCallStatusChange}
           hideFoNumber={true}
+          enableRandomCallStatusPool={true}
+          selectedRandomStatuses={selectedRandomStatuses}
         />
 
         <BranchFieldsSection

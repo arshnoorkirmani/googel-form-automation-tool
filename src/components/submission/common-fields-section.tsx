@@ -1,10 +1,15 @@
 import type { FieldErrors, UseFormRegister } from "react-hook-form";
 
 import { FieldError } from "@/components/shared/field-error";
-import { CALL_STATUS_UI_OPTIONS } from "@/modules/submission/submission.support";
 import {
-  OMC_OPTIONS,
-  type SubmissionFormValues
+  CALL_STATUS_UI_OPTIONS,
+  RANDOM_CALL_STATUS_UI_LABEL,
+  RANDOM_CALL_STATUS_UI_OPTIONS,
+  RANDOM_CALL_STATUS_UI_VALUE,
+  isRandomCallStatusSelection
+} from "@/modules/submission/submission.support";
+import {
+  OMC_OPTIONS
 } from "@/modules/submission/submission.types";
 
 type CommonFieldsSectionProps = {
@@ -13,6 +18,8 @@ type CommonFieldsSectionProps = {
   callStatus: any;
   onCallStatusChange: (nextValue: string) => void;
   hideFoNumber?: boolean;
+  enableRandomCallStatusPool?: boolean;
+  selectedRandomStatuses?: string[];
 };
 
 function InputField({
@@ -46,7 +53,9 @@ export function CommonFieldsSection({
   errors,
   callStatus,
   onCallStatusChange,
-  hideFoNumber
+  hideFoNumber,
+  enableRandomCallStatusPool = false,
+  selectedRandomStatuses = []
 }: CommonFieldsSectionProps) {
   const callStatusField = register("callStatus");
 
@@ -83,8 +92,10 @@ export function CommonFieldsSection({
             className="w-full rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-text outline-none focus:border-accent"
           >
             <option value="">Select Call Status</option>
-            {hideFoNumber && (
-              <option value="Random Unsupported">Random Unsupported</option>
+            {hideFoNumber && enableRandomCallStatusPool && (
+              <option value={RANDOM_CALL_STATUS_UI_VALUE}>
+                {RANDOM_CALL_STATUS_UI_LABEL}
+              </option>
             )}
             {CALL_STATUS_UI_OPTIONS.map((option) => (
               <option
@@ -98,6 +109,41 @@ export function CommonFieldsSection({
           </select>
           <FieldError message={errors.callStatus?.message?.toString()} />
         </label>
+
+        {enableRandomCallStatusPool && isRandomCallStatusSelection(callStatus) ? (
+          <div className="md:col-span-2 rounded-xl border border-line bg-surface-alt p-4">
+            <p className="text-sm font-medium text-text">
+              Allowed statuses for random selection
+            </p>
+            <p className="mt-1 text-xs text-muted">
+              Batch automation will choose only from the checked statuses.
+            </p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {RANDOM_CALL_STATUS_UI_OPTIONS.map((option) => (
+                <label
+                  key={option.value}
+                  className="flex items-center gap-3 rounded-xl border border-line bg-white px-4 py-3 text-sm text-text"
+                >
+                  <input
+                    type="checkbox"
+                    value={option.value}
+                    {...register("randomCallStatusPool")}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              ))}
+            </div>
+            <FieldError
+              message={errors.randomCallStatusPool?.message?.toString()}
+            />
+            <p className="mt-3 text-xs text-muted">
+              Selected pool:{" "}
+              {selectedRandomStatuses.length > 0
+                ? selectedRandomStatuses.join(", ")
+                : "None selected"}
+            </p>
+          </div>
+        ) : null}
 
         <label className="block">
           <span className="mb-2 block text-sm font-medium text-text">OMC</span>

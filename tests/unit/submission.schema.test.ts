@@ -10,7 +10,7 @@ describe("submissionSchema", () => {
       fuelingPotential: "1500",
       fuelingFrequency: "2",
       remarks: "Interested customer.",
-      mode: "DRY_RUN",
+      mode: "SUBMIT",
       debug: false,
       interestedReason: "Will Recharge Later",
       interestedNextTransaction: {
@@ -25,6 +25,22 @@ describe("submissionSchema", () => {
     expect(submissionSchema.parse(payload)).toMatchObject(payload);
   });
 
+  it("normalizes legacy dry-run payloads to submit mode", () => {
+    const payload = {
+      foNumber: "FO-1005",
+      callStatus: "Call Drop",
+      omc: "RIL",
+      noOfTrucks: "2",
+      fuelingPotential: "1200",
+      fuelingFrequency: "1",
+      remarks: "Legacy payload",
+      mode: "DRY_RUN",
+      debug: false
+    };
+
+    expect(submissionSchema.parse(payload).mode).toBe("SUBMIT");
+  });
+
   it("rejects unsupported call statuses", () => {
     const result = submissionSchema.safeParse({
       foNumber: "FO-1002",
@@ -34,7 +50,7 @@ describe("submissionSchema", () => {
       fuelingPotential: "1200",
       fuelingFrequency: "1",
       remarks: "Unsupported branch.",
-      mode: "DRY_RUN",
+      mode: "SUBMIT",
       debug: false
     });
 

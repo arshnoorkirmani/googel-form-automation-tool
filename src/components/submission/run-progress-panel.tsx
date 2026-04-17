@@ -6,6 +6,17 @@ type RunProgressPanelProps = {
 };
 
 export function RunProgressPanel({ run }: RunProgressPanelProps) {
+  const formatDuration = (durationMs?: number) => {
+    if (!durationMs || durationMs <= 0) {
+      return "-";
+    }
+
+    const totalSeconds = Math.round(durationMs / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+  };
+
   if (!run) {
     return (
       <section className="rounded-2xl border border-line bg-surface p-6 shadow-panel">
@@ -16,8 +27,8 @@ export function RunProgressPanel({ run }: RunProgressPanelProps) {
           <h3 className="mt-1 text-lg font-semibold text-text">No active run</h3>
         </div>
         <p className="mt-4 text-sm text-muted">
-          Start a dry run or a submit run to see live progress, status, logs, and
-          artifacts here.
+          Start a submission to see live progress, status, logs, and artifacts
+          here.
         </p>
       </section>
     );
@@ -36,6 +47,25 @@ export function RunProgressPanel({ run }: RunProgressPanelProps) {
       </div>
 
       <div className="mt-5 space-y-3">
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="rounded-xl border border-line bg-surface-alt px-4 py-3 text-sm">
+            <p className="text-xs uppercase tracking-[0.15em] text-muted">FO Number</p>
+            <p className="mt-1 text-text">{run.foNumber}</p>
+          </div>
+          <div className="rounded-xl border border-line bg-surface-alt px-4 py-3 text-sm">
+            <p className="text-xs uppercase tracking-[0.15em] text-muted">Call Status</p>
+            <p className="mt-1 text-text">{run.callStatus}</p>
+          </div>
+          <div className="rounded-xl border border-line bg-surface-alt px-4 py-3 text-sm">
+            <p className="text-xs uppercase tracking-[0.15em] text-muted">Created</p>
+            <p className="mt-1 text-text">{new Date(run.createdAt).toLocaleString()}</p>
+          </div>
+          <div className="rounded-xl border border-line bg-surface-alt px-4 py-3 text-sm">
+            <p className="text-xs uppercase tracking-[0.15em] text-muted">Duration</p>
+            <p className="mt-1 text-text">{formatDuration(run.durationMs)}</p>
+          </div>
+        </div>
+
         {run.progress.map((event) => (
           <div
             key={`${event.stepId}-${event.at}`}
@@ -63,12 +93,10 @@ export function RunProgressPanel({ run }: RunProgressPanelProps) {
         </p>
       ) : null}
 
-      {run.artifacts.screenshotPath || run.artifacts.logFilePath ? (
+      {run.artifacts.logFilePath || run.artifacts.reportPath ? (
         <div className="mt-5 space-y-1 text-xs text-muted">
-          {run.artifacts.screenshotPath ? (
-            <p>Screenshot: {run.artifacts.screenshotPath}</p>
-          ) : null}
           {run.artifacts.logFilePath ? <p>Log: {run.artifacts.logFilePath}</p> : null}
+          {run.artifacts.reportPath ? <p>Report: {run.artifacts.reportPath}</p> : null}
         </div>
       ) : null}
     </section>

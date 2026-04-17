@@ -1,7 +1,7 @@
 {
   "appName": "Dispositions Form Automation",
   "formUrl": "https://docs.google.com/forms/d/e/1FAIpQLSeElvHr-D5FXndyGFdk5VrcNKprY_wakDRGlmNJytjInZRaUA/viewform",
-  "defaultMode": "DRY_RUN",
+  "defaultMode": "SUBMIT",
   "maxRetries": 2,
   "maxBatchRows": 50,
   "debug": {
@@ -12,6 +12,8 @@
     "storageState": "storage/auth/storage-state.json",
     "authMetadata": "storage/auth/auth-metadata.json",
     "historyFile": "storage/history/runs.json",
+    "batchRunsFile": "storage/history/batch-runs.json",
+    "batchRowsFile": "storage/history/batch-rows.json",
     "logsDir": "storage/logs",
     "artifactsDir": "storage/artifacts"
   }

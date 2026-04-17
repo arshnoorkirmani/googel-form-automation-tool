@@ -18,7 +18,7 @@ export function createDefaultSubmissionValues(): SubmissionFormValues {
     fuelingPotential: "",
     fuelingFrequency: "",
     remarks: "",
-    mode: "DRY_RUN",
+    mode: "SUBMIT",
     debug: false
   };
 }

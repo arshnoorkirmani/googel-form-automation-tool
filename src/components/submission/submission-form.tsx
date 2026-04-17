@@ -31,7 +31,6 @@ import type { RunRecord } from "@/server/runs/run-types";
 
 function buildPreviewItems(values: SubmissionFormValues): SubmissionSummaryItem[] {
   const items: SubmissionSummaryItem[] = [
-    { label: "Mode", value: values.mode },
     { label: "FO Number", value: values.foNumber },
     { label: "Call Status", value: values.callStatus || "-" },
     { label: "OMC", value: values.omc || "-" },
@@ -121,7 +120,6 @@ export function SubmissionForm() {
 
   const watchedValues = watch();
   const callStatus = watchedValues.callStatus;
-  const mode = watchedValues.mode;
 
   useEffect(() => {
     return () => {
@@ -182,8 +180,7 @@ export function SubmissionForm() {
   const onPreview = handleSubmit((values) => {
     if (authStatus && authStatus.state !== "VALID") {
       setRunError(
-        authStatus.reason ??
-          "Login setup is required before starting a dry run or submit."
+        authStatus.reason ?? "Login setup is required before starting a submission."
       );
       return;
     }
@@ -259,12 +256,12 @@ export function SubmissionForm() {
               </h2>
             </div>
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              Default mode is Dry Run
+              Submit flow only
             </div>
           </div>
           <p className="mt-3 max-w-3xl text-sm text-muted">
-            Fill the common fields, choose one of the supported Call Status branches,
-            preview the payload, and then run a safe dry run or a real submit.
+            Fill the common fields, choose one of the supported Call Status
+            branches, preview the payload, and then run the live submit flow.
           </p>
         </div>
 
@@ -350,7 +347,6 @@ export function SubmissionForm() {
 
       <PreviewDialog
         open={previewOpen}
-        mode={mode}
         items={previewItems}
         onClose={() => setPreviewOpen(false)}
         onConfirm={startRun}

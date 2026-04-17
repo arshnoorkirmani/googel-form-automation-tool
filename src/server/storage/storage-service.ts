@@ -1,12 +1,16 @@
-import { access, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { configService } from "@/server/config/config-service";
+import { historyRepository } from "@/server/history/history-repository";
+import { batchHistoryRepository } from "@/server/runs/batch-history-repository";
 import { batchStore } from "@/server/runs/batch-store";
+import { runStore } from "@/server/runs/run-store";
 
 type StorageSummary = {
-  historyEntries: number;
-  historyFilePresent: boolean;
+  submissionEntries: number;
+  batchRunEntries: number;
+  batchRowEntries: number;
   logFiles: number;
   artifactFiles: number;
   artifactRuns: number;
@@ -14,6 +18,7 @@ type StorageSummary = {
   authSessionPresent: boolean;
   authMetadataPresent: boolean;
   configPresent: boolean;
+  activeRunsInMemory: number;
   batchRunsInMemory: number;
   batchHasActiveRun: boolean;
 };
@@ -108,29 +113,30 @@ async function clearDirectory(
 class StorageService {
   async getSummary(): Promise<StorageSummary> {
     const config = await configService.getConfig();
-    const historyFilePresent = await exists(config.paths.historyFile);
     const logsDir = config.paths.logsDir;
     const artifactsDir = config.paths.artifactsDir;
     const samplesDir = path.resolve(process.cwd(), "storage", "samples");
     const configPath = path.resolve(process.cwd(), "config", "app.config.json");
 
-    const historyEntries = historyFilePresent
-      ? await this.countHistoryEntries(config.paths.historyFile)
-      : 0;
-
-    const logFiles = await countFiles(logsDir, {
-      excludeNames: [".gitkeep"]
-    });
-    const artifactFiles = await countFiles(artifactsDir, {
-      recursive: true,
-      excludeNames: [".gitkeep"]
-    });
-    const artifactRuns = await countDirectories(artifactsDir, {
-      excludeNames: [".gitkeep"]
-    });
-    const sampleFiles = await countFiles(samplesDir, {
-      excludeNames: [".gitkeep"]
-    });
+    const [submissionEntries, batchRunEntries, batchRowEntries, logFiles, artifactFiles, artifactRuns, sampleFiles] =
+      await Promise.all([
+        historyRepository.list().then((records) => records.length),
+        batchHistoryRepository.countRuns(),
+        batchHistoryRepository.countRows(),
+        countFiles(logsDir, {
+          excludeNames: [".gitkeep"]
+        }),
+        countFiles(artifactsDir, {
+          recursive: true,
+          excludeNames: [".gitkeep"]
+        }),
+        countDirectories(artifactsDir, {
+          excludeNames: [".gitkeep"]
+        }),
+        countFiles(samplesDir, {
+          excludeNames: [".gitkeep"]
+        })
+      ]);
 
     const batchRuns = batchStore.list();
     const batchHasActiveRun = batchRuns.some((run) =>
@@ -138,8 +144,9 @@ class StorageService {
     );
 
     return {
-      historyEntries,
-      historyFilePresent,
+      submissionEntries,
+      batchRunEntries,
+      batchRowEntries,
       logFiles,
       artifactFiles,
       artifactRuns,
@@ -147,6 +154,7 @@ class StorageService {
       authSessionPresent: await exists(config.paths.storageState),
       authMetadataPresent: await exists(config.paths.authMetadata),
       configPresent: await exists(configPath),
+      activeRunsInMemory: runStore.listActive().length,
       batchRunsInMemory: batchRuns.length,
       batchHasActiveRun
     };
@@ -158,6 +166,7 @@ class StorageService {
 
     if (action === "CLEAR_HISTORY" || action === "CLEAR_NON_AUTH") {
       await writeFile(config.paths.historyFile, "[]\n", "utf8");
+      await batchHistoryRepository.clear();
     }
 
     if (action === "CLEAR_LOGS" || action === "CLEAR_NON_AUTH") {
@@ -181,6 +190,7 @@ class StorageService {
         throw new Error("Stop all active batch runs before clearing batch data.");
       }
       batchStore.clearAll();
+      await batchHistoryRepository.clear();
     }
 
     if (action === "CLEAR_AUTH") {
@@ -189,15 +199,6 @@ class StorageService {
     }
   }
 
-  private async countHistoryEntries(historyFile: string): Promise<number> {
-    try {
-      const raw = await readFile(historyFile, "utf8");
-      const parsed = JSON.parse(raw) as unknown[];
-      return Array.isArray(parsed) ? parsed.length : 0;
-    } catch {
-      return 0;
-    }
-  }
 }
 
 export const storageService = new StorageService();

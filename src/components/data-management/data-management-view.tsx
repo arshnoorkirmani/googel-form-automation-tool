@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 
 type StorageSummary = {
-  historyEntries: number;
-  historyFilePresent: boolean;
+  submissionEntries: number;
+  batchRunEntries: number;
+  batchRowEntries: number;
   logFiles: number;
   artifactFiles: number;
   artifactRuns: number;
@@ -12,6 +13,7 @@ type StorageSummary = {
   authSessionPresent: boolean;
   authMetadataPresent: boolean;
   configPresent: boolean;
+  activeRunsInMemory: number;
   batchRunsInMemory: number;
   batchHasActiveRun: boolean;
 };
@@ -125,9 +127,9 @@ export function DataManagementView() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-line bg-surface p-5 shadow-panel">
-          <h3 className="text-lg font-semibold text-text">Run History</h3>
+          <h3 className="text-lg font-semibold text-text">Submission History</h3>
           <p className="mt-1 text-sm text-muted">
-            {summary.historyEntries} entries in storage/history/runs.json
+            {summary.submissionEntries} entries in storage/history/runs.json
           </p>
           <button
             type="button"
@@ -136,6 +138,21 @@ export function DataManagementView() {
             className="mt-4 rounded-xl border border-line px-4 py-2 text-sm font-medium hover:bg-surface-alt disabled:opacity-60"
           >
             Clear History
+          </button>
+        </div>
+
+        <div className="rounded-2xl border border-line bg-surface p-5 shadow-panel">
+          <h3 className="text-lg font-semibold text-text">Batch History</h3>
+          <p className="mt-1 text-sm text-muted">
+            {summary.batchRunEntries} batch summaries and {summary.batchRowEntries} batch rows
+          </p>
+          <button
+            type="button"
+            onClick={() => runClear("CLEAR_BATCH")}
+            disabled={busyAction !== null || summary.batchHasActiveRun}
+            className="mt-4 rounded-xl border border-line px-4 py-2 text-sm font-medium hover:bg-surface-alt disabled:opacity-60"
+          >
+            Clear Batch History
           </button>
         </div>
 
@@ -173,21 +190,17 @@ export function DataManagementView() {
         <div className="rounded-2xl border border-line bg-surface p-5 shadow-panel">
           <h3 className="text-lg font-semibold text-text">Batch Memory</h3>
           <p className="mt-1 text-sm text-muted">
-            {summary.batchRunsInMemory} batch runs in memory
+            {summary.activeRunsInMemory} active single runs and {summary.batchRunsInMemory} batch runs in memory
           </p>
           {summary.batchHasActiveRun ? (
             <p className="mt-2 text-xs text-amber-700">
               Stop active batch runs before clearing.
             </p>
           ) : null}
-          <button
-            type="button"
-            onClick={() => runClear("CLEAR_BATCH")}
-            disabled={busyAction !== null || summary.batchHasActiveRun}
-            className="mt-4 rounded-xl border border-line px-4 py-2 text-sm font-medium hover:bg-surface-alt disabled:opacity-60"
-          >
-            Clear Batch Results
-          </button>
+          <p className="mt-4 text-xs text-muted">
+            In-memory batch state is cleared together with batch history when you use
+            the batch history cleanup above.
+          </p>
         </div>
 
         <div className="rounded-2xl border border-line bg-surface p-5 shadow-panel">

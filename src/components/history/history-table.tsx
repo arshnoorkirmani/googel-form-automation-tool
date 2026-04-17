@@ -11,7 +11,7 @@ export function HistoryTable({ history }: HistoryTableProps) {
     return (
       <EmptyState
         title="No run history yet"
-        description="Once operators start dry runs or submissions, they will appear here with logs and artifact paths."
+        description="Once operators start submissions, they will appear here with logs and artifact paths."
       />
     );
   }
@@ -23,7 +23,6 @@ export function HistoryTable({ history }: HistoryTableProps) {
           <tr className="text-left text-xs uppercase tracking-[0.15em] text-muted">
             <th className="px-4 py-3">Run ID</th>
             <th className="px-4 py-3">Status</th>
-            <th className="px-4 py-3">Mode</th>
             <th className="px-4 py-3">Call Status</th>
             <th className="px-4 py-3">Created</th>
             <th className="px-4 py-3">Artifacts</th>
@@ -36,7 +35,6 @@ export function HistoryTable({ history }: HistoryTableProps) {
               <td className="px-4 py-3">
                 <StatusBadge status={row.status} />
               </td>
-              <td className="px-4 py-3">{row.mode}</td>
               <td className="px-4 py-3">{row.callStatus}</td>
               <td className="px-4 py-3">
                 {new Date(row.createdAt).toLocaleString()}

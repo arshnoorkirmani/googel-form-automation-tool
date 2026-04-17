@@ -11,7 +11,7 @@ describe("runStore", () => {
       fuelingPotential: "2200",
       fuelingFrequency: "4",
       remarks: "No interest right now.",
-      mode: "DRY_RUN",
+      mode: "SUBMIT",
       debug: false,
       notInterestedReason: "Load Issue"
     } as const;
@@ -19,10 +19,13 @@ describe("runStore", () => {
     runStore.create(runId, submission);
     runStore.setRunning(runId);
     runStore.addProgress(runId, "FORM_OPENED", "Form opened");
-    const completed = runStore.succeed(runId, "Dry run completed.", false);
+    const completed = runStore.succeed(runId, "Form submitted successfully.", true);
 
     expect(completed.status).toBe("SUCCEEDED");
-    expect(completed.result?.dryRun).toBe(true);
+    expect(completed.result?.submitted).toBe(true);
+    expect(completed.foNumber).toBe("FO-1003");
+    expect(completed.remarks).toBe("No interest right now.");
+    expect(completed.durationMs).toBeTypeOf("number");
     expect(runStore.get(runId)?.progress.length).toBeGreaterThan(1);
   });
 });

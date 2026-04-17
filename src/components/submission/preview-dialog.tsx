@@ -2,7 +2,6 @@ import type { SubmissionSummaryItem } from "@/modules/submission/submission.type
 
 type PreviewDialogProps = {
   open: boolean;
-  mode: string;
   items: SubmissionSummaryItem[];
   onClose: () => void;
   onConfirm: () => void;
@@ -11,7 +10,6 @@ type PreviewDialogProps = {
 
 export function PreviewDialog({
   open,
-  mode,
   items,
   onClose,
   onConfirm,
@@ -29,9 +27,7 @@ export function PreviewDialog({
             <p className="text-xs uppercase tracking-[0.18em] text-muted">
               Preview
             </p>
-            <h3 className="mt-1 text-lg font-semibold text-text">
-              Review Before {mode === "SUBMIT" ? "Submit" : "Dry Run"}
-            </h3>
+            <h3 className="mt-1 text-lg font-semibold text-text">Review Before Submit</h3>
           </div>
           <button
             type="button"
@@ -68,11 +64,7 @@ export function PreviewDialog({
             disabled={busy}
             className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white"
           >
-            {busy
-              ? "Starting..."
-              : mode === "SUBMIT"
-                ? "Confirm and Submit"
-                : "Confirm Dry Run"}
+            {busy ? "Starting..." : "Confirm and Submit"}
           </button>
         </div>
       </div>

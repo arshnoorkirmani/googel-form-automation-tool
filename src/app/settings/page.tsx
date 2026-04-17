@@ -31,16 +31,36 @@ export default async function SettingsPage() {
             <p className="mt-2 break-all text-sm text-muted">{config.formUrl}</p>
           </div>
           <div className="rounded-xl border border-line bg-surface-alt p-4">
-            <p className="text-sm font-medium text-text">Default Mode</p>
-            <p className="mt-2 text-sm text-muted">{config.defaultMode}</p>
+            <p className="text-sm font-medium text-text">Execution Flow</p>
+            <p className="mt-2 text-sm text-muted">
+              {config.defaultMode === "SUBMIT" ? "Submit only" : config.defaultMode}
+            </p>
           </div>
           <div className="rounded-xl border border-line bg-surface-alt p-4">
             <p className="text-sm font-medium text-text">Retry Attempts</p>
             <p className="mt-2 text-sm text-muted">{config.maxRetries}</p>
           </div>
           <div className="rounded-xl border border-line bg-surface-alt p-4">
+            <p className="text-sm font-medium text-text">Automation Speed</p>
+            <p className="mt-2 text-sm text-muted capitalize">
+              {config.automation.speedMode}
+            </p>
+          </div>
+          <div className="rounded-xl border border-line bg-surface-alt p-4">
             <p className="text-sm font-medium text-text">Debug Slow Motion</p>
             <p className="mt-2 text-sm text-muted">{config.debug.slowMoMs} ms</p>
+          </div>
+          <div className="rounded-xl border border-line bg-surface-alt p-4">
+            <p className="text-sm font-medium text-text">Screenshot Storage</p>
+            <p className="mt-2 text-sm text-muted">
+              {config.persistence.screenshotsEnabled ? "Enabled" : "Disabled by default"}
+            </p>
+          </div>
+          <div className="rounded-xl border border-line bg-surface-alt p-4">
+            <p className="text-sm font-medium text-text">JSON Run Reports</p>
+            <p className="mt-2 text-sm text-muted">
+              {config.persistence.runReportsEnabled ? "Enabled" : "Disabled by default"}
+            </p>
           </div>
         </div>
       </section>

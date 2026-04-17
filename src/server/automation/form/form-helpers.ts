@@ -6,6 +6,53 @@ import {
   type DateTimeValue
 } from "@/lib/utils/date-time";
 import { FORM_BUTTONS } from "@/server/automation/form/form-locators";
+import { configService } from "@/server/config/config-service";
+
+const CALL_STATUS_LABEL = "Call Status";
+const CALL_STATUS_SELECTION_MAX_ATTEMPTS = 3;
+
+type DropdownSelectionSnapshot = {
+  matchedValue: string | null;
+  rawValue: string;
+};
+
+function randomBetween(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+async function waitForHumanDelay(
+  page: Page,
+  range: { min: number; max: number }
+): Promise<void> {
+  await page.waitForTimeout(randomBetween(range.min, range.max));
+}
+
+async function waitForFieldDelay(page: Page): Promise<void> {
+  const config = await configService.getConfig();
+  await waitForHumanDelay(page, config.automation.fieldDelay);
+}
+
+async function waitForPageDelay(page: Page): Promise<void> {
+  const config = await configService.getConfig();
+  await waitForHumanDelay(page, config.automation.pageDelay);
+}
+
+async function typeTextLikeHuman(
+  input: Locator,
+  value: string
+): Promise<void> {
+  const config = await configService.getConfig();
+  const typingDelay = config.automation.typingDelay;
+
+  await input.click();
+  await input.fill("");
+
+  for (const character of value) {
+    await input.type(character, {
+      delay: randomBetween(typingDelay.min, typingDelay.max)
+    });
+  }
+}
 
 function escapeForRegex(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -33,6 +80,44 @@ function getOptionCandidates(optionText: string): string[] {
   }
 
   return [optionText];
+}
+
+function normalizeTextValue(value: string | null | undefined): string {
+  return value?.replace(/\s+/g, " ").trim().toLowerCase() ?? "";
+}
+
+function isCallStatusLabel(label: string): boolean {
+  return normalizeTextValue(label) === normalizeTextValue(CALL_STATUS_LABEL);
+}
+
+function findMatchingCandidate(
+  text: string,
+  candidates: readonly string[]
+): string | null {
+  const normalizedText = normalizeTextValue(text);
+
+  for (const candidate of candidates) {
+    if (normalizedText === normalizeTextValue(candidate)) {
+      return candidate;
+    }
+  }
+
+  const segments = text
+    .split(/\r?\n/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+
+  for (const segment of segments) {
+    const matchedCandidate = candidates.find(
+      (candidate) => normalizeTextValue(segment) === normalizeTextValue(candidate)
+    );
+
+    if (matchedCandidate) {
+      return matchedCandidate;
+    }
+  }
+
+  return null;
 }
 
 export async function waitForFormReady(page: Page): Promise<void> {
@@ -64,16 +149,24 @@ export async function ensureQuestion(page: Page, label: string): Promise<Locator
   return question;
 }
 
-export async function clickNext(page: Page): Promise<void> {
-  const nextButton = page.getByRole("button", { name: FORM_BUTTONS.next }).first();
+export async function clickNext(
+  page: Page,
+  buttonName: string | RegExp = FORM_BUTTONS.next
+): Promise<void> {
+  const nextButton = page.getByRole("button", { name: buttonName }).first();
   await nextButton.click();
+  await waitForPageDelay(page);
 }
 
-export async function clickSubmit(page: Page): Promise<void> {
+export async function clickSubmit(
+  page: Page,
+  buttonName: string | RegExp = FORM_BUTTONS.submit
+): Promise<void> {
   const submitButton = page
-    .getByRole("button", { name: FORM_BUTTONS.submit })
+    .getByRole("button", { name: buttonName })
     .first();
   await submitButton.click();
+  await waitForPageDelay(page);
 }
 
 export async function fillTextQuestion(
@@ -84,7 +177,8 @@ export async function fillTextQuestion(
   const question = await ensureQuestion(page, label);
   const input = question.locator("input[type='text'], textarea").first();
   await input.waitFor({ state: "visible", timeout: 10_000 });
-  await input.fill(value);
+  await typeTextLikeHuman(input, value);
+  await waitForFieldDelay(page);
 }
 
 export async function checkCheckboxQuestion(
@@ -109,6 +203,22 @@ export async function checkCheckboxQuestion(
   if (!checked) {
     await checkbox.click();
   }
+
+  await waitForFieldDelay(page);
+}
+
+async function readLocatorText(locator: Locator): Promise<string> {
+  if ((await locator.count()) === 0) {
+    return "";
+  }
+
+  const innerText = await locator.innerText().catch(() => "");
+  if (innerText.trim().length > 0) {
+    return innerText.trim();
+  }
+
+  const textContent = (await locator.textContent().catch(() => "")) ?? "";
+  return textContent.trim();
 }
 
 async function resolveDropdownTrigger(scope: Locator): Promise<Locator> {
@@ -128,13 +238,195 @@ async function resolveDropdownTrigger(scope: Locator): Promise<Locator> {
   throw new Error("Could not find a dropdown trigger.");
 }
 
+async function prepareDropdownTrigger(
+  question: Locator,
+  trigger: Locator
+): Promise<void> {
+  await question.scrollIntoViewIfNeeded().catch(() => undefined);
+  await trigger.waitFor({ state: "visible", timeout: 10_000 });
+}
+
+async function waitForVisibleDropdownOption(
+  page: Page,
+  optionText: string
+): Promise<void> {
+  const candidates = getOptionCandidates(optionText);
+  let lastError: Error | null = null;
+
+  for (const candidateText of candidates) {
+    try {
+      await page
+        .locator('[role="option"]:visible')
+        .filter({ hasText: exactTextRegex(candidateText) })
+        .first()
+        .waitFor({ state: "visible", timeout: 5_000 });
+      return;
+    } catch (error) {
+      lastError =
+        error instanceof Error
+          ? error
+          : new Error(`Option "${candidateText}" was not visible.`);
+    }
+  }
+
+  throw lastError ?? new Error(`Option "${optionText}" was not visible.`);
+}
+
+async function getDropdownSelectionSnapshot(
+  question: Locator,
+  trigger: Locator,
+  optionText: string
+): Promise<DropdownSelectionSnapshot> {
+  const candidates = getOptionCandidates(optionText);
+  const textSources = [
+    question.locator("[role='combobox'][aria-expanded='false']").first(),
+    question.locator("[role='listbox'][aria-expanded='false']").first(),
+    trigger,
+    question.locator("[role='option'][aria-selected='true']").first()
+  ];
+
+  let rawValue = "";
+
+  for (const source of textSources) {
+    const text = await readLocatorText(source);
+    if (!text) {
+      continue;
+    }
+
+    if (!rawValue) {
+      rawValue = text;
+    }
+
+    const matchedValue = findMatchingCandidate(text, candidates);
+    if (matchedValue) {
+      return {
+        matchedValue,
+        rawValue: text
+      };
+    }
+  }
+
+  return {
+    matchedValue: null,
+    rawValue
+  };
+}
+
+async function waitForAppliedDropdownSelection(
+  page: Page,
+  question: Locator,
+  trigger: Locator,
+  optionText: string
+): Promise<DropdownSelectionSnapshot> {
+  const deadline = Date.now() + 1_500;
+  let snapshot = await getDropdownSelectionSnapshot(question, trigger, optionText);
+
+  while (!snapshot.matchedValue && Date.now() < deadline) {
+    await page.waitForTimeout(150);
+    snapshot = await getDropdownSelectionSnapshot(question, trigger, optionText);
+  }
+
+  return snapshot;
+}
+
+async function closeDropdownIfOpen(
+  page: Page,
+  trigger: Locator
+): Promise<void> {
+  await page.keyboard.press("Escape").catch(() => undefined);
+  await page.waitForTimeout(150);
+
+  const isExpanded =
+    (await trigger.getAttribute("aria-expanded").catch(() => null)) === "true";
+
+  if (isExpanded) {
+    await trigger.click().catch(() => undefined);
+    await page.waitForTimeout(150);
+  }
+}
+
+async function selectCallStatusQuestion(
+  page: Page,
+  question: Locator,
+  optionText: string
+): Promise<void> {
+  const trigger = await resolveDropdownTrigger(question);
+  await prepareDropdownTrigger(question, trigger);
+
+  let lastObservedValue = "";
+
+  for (
+    let attempt = 1;
+    attempt <= CALL_STATUS_SELECTION_MAX_ATTEMPTS;
+    attempt += 1
+  ) {
+    console.info(
+      `[form] Call Status selection attempt ${attempt}/${CALL_STATUS_SELECTION_MAX_ATTEMPTS}: intended="${optionText}"`
+    );
+
+    try {
+      if (attempt > 1) {
+        await closeDropdownIfOpen(page, trigger);
+      }
+
+      await prepareDropdownTrigger(question, trigger);
+      await trigger.click();
+      await waitForVisibleDropdownOption(page, optionText);
+      await selectVisibleOption(page, optionText);
+
+      const selectionSnapshot = await waitForAppliedDropdownSelection(
+        page,
+        question,
+        trigger,
+        optionText
+      );
+
+      lastObservedValue =
+        selectionSnapshot.matchedValue ?? selectionSnapshot.rawValue ?? "";
+
+      console.info(
+        `[form] Call Status selected value after click: "${lastObservedValue}"`
+      );
+
+      if (selectionSnapshot.matchedValue) {
+        if (!lastObservedValue.trim()) {
+          throw new Error("Call Status selection failed after retries");
+        }
+
+        await waitForFieldDelay(page);
+        return;
+      }
+    } catch (error) {
+      lastObservedValue =
+        error instanceof Error && error.message.trim().length > 0
+          ? error.message
+          : lastObservedValue;
+    }
+
+    if (attempt < CALL_STATUS_SELECTION_MAX_ATTEMPTS) {
+      console.warn(
+        `[form] Call Status retry ${attempt}/${CALL_STATUS_SELECTION_MAX_ATTEMPTS}: intended="${optionText}", selected="${lastObservedValue}"`
+      );
+    }
+  }
+
+  throw new Error("Call Status selection failed after retries");
+}
+
 export async function selectDropdownQuestion(
   page: Page,
   label: string,
   optionText: string
 ): Promise<void> {
   const question = await ensureQuestion(page, label);
+
+  if (isCallStatusLabel(label)) {
+    await selectCallStatusQuestion(page, question, optionText);
+    return;
+  }
+
   const trigger = await resolveDropdownTrigger(question);
+  await prepareDropdownTrigger(question, trigger);
   await trigger.click();
 
   const overlayOptions = question.locator(".OA0qNb").first();
@@ -142,6 +434,7 @@ export async function selectDropdownQuestion(
     try {
       await overlayOptions.waitFor({ state: "visible", timeout: 2_000 });
       await selectVisibleOption(overlayOptions, optionText);
+      await waitForFieldDelay(page);
       return;
     } catch {
       // Fall through to other dropdown strategies.
@@ -155,6 +448,7 @@ export async function selectDropdownQuestion(
     try {
       await expandedListbox.waitFor({ state: "visible", timeout: 2_000 });
       await selectVisibleOption(expandedListbox, optionText);
+      await waitForFieldDelay(page);
       return;
     } catch {
       // Fall through to the broad question scope fallback.
@@ -162,6 +456,7 @@ export async function selectDropdownQuestion(
   }
 
   await selectVisibleOption(question, optionText);
+  await waitForFieldDelay(page);
 }
 
 export async function selectVisibleOption(
@@ -253,6 +548,8 @@ export async function fillDateTimeQuestion(
     await meridiemListbox.click();
     await selectVisibleOption(meridiemListbox, value.meridiem);
   }
+
+  await waitForFieldDelay(page);
 }
 
 export async function waitForQuestionLabel(

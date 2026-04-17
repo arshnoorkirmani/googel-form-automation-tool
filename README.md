@@ -1,52 +1,69 @@
 # Dispositions Form Automation
 
-Windows-local internal automation tool for Blackbuck to automate a restricted Google Form with a professional dashboard, saved session reuse, dry-run-first safety, structured logs, screenshots on failure, and a future-ready architecture for batch processing.
+Windows-local Next.js + Playwright tool to automate a restricted Google Form with saved browser-session reuse, single submission flow, batch submission flow, run history, screenshots, logs, and local artifact storage.
 
-## What This Project Does
+## What This App Does
 
-- Runs locally on Windows only.
-- Uses a single Next.js + TypeScript app for both UI and server-side automation APIs.
-- Reuses a manually created Playwright browser session instead of storing credentials.
-- Defaults every run to `DRY_RUN`.
-- Supports `SUBMIT` mode for real submissions.
-- Handles the supported multi-page Google Form branches:
-  - Interested
-  - Follow Up
-  - Call Back
-  - Not Interested
-  - Call Disconnected
-  - Call Drop
-  - Not Connected
-  - Language Barrier
-- Persists:
-  - auth session metadata
-  - run history
-  - structured logs
-  - screenshots and JSON run reports
+- Opens a dashboard-driven website on your local machine
+- Reuses a manually authenticated browser session instead of storing credentials
+- Submits supported Google Form flows through Playwright
+- Supports:
+  - single submission
+  - bulk submission
+  - auth setup / refresh
+  - history tracking
+  - local storage cleanup
+- Stores runtime data in `storage/`
 
-## High-Level Architecture
+## Website Pages
 
-```text
-Next.js App Router UI
-  -> Dashboard / New Submission / Batch / History / Settings
-  -> API routes for auth, runs, history, config
+- `/dashboard`
+  - auth status
+  - today run stats
+  - active work summary
+  - recent submission and batch history
+- `/submissions/new`
+  - single form submission flow
+  - branch fields based on `Call Status`
+  - preview before live run
+- `/batch`
+  - bulk FO number submission
+  - pacing control
+  - shared values reused across rows
+- `/history`
+  - completed runs and batch history
+- `/settings`
+  - auth setup buttons
+  - live runtime config view
+- `/data-management`
+  - clear history, logs, artifacts, sample data, and batch state
 
-Server Modules
-  -> Auth service + manual login setup manager
-  -> Session validator for expiry / access loss detection
-  -> Playwright automation runner
-  -> Branch-specific form handlers
-  -> Run queue + in-memory live run store
-  -> JSON history repository
-  -> Structured logger + artifact service
+## Screenshots
 
-Local Storage
-  -> storage/auth
-  -> storage/history
-  -> storage/logs
-  -> storage/artifacts
-  -> storage/samples
-```
+### Dashboard
+
+![Dashboard](public/readme/dashboard.png)
+
+### New Submission
+
+![New Submission](public/readme/new-submission.png)
+
+### Batch Submission
+
+![Batch Submission](public/readme/batch-submission.png)
+
+### Settings
+
+![Settings](public/readme/settings.png)
+
+## Tech Stack
+
+- Next.js App Router
+- TypeScript
+- Playwright
+- React Hook Form
+- Zod
+- Local JSON-based storage
 
 ## Project Structure
 
@@ -58,31 +75,15 @@ src/
     batch/
     history/
     settings/
+    data-management/
     api/
   components/
-    dashboard/
-    submission/
-    history/
-    shared/
+  lib/
   modules/
-    submission/
-    batch/
   server/
-    auth/
-    automation/
-    config/
-    history/
-    logging/
-    reports/
-    runs/
-storage/
-  auth/
-  history/
-  logs/
-  artifacts/
-  samples/
 config/
-  app.config.json
+storage/
+public/
 tests/
 scripts/
 ```
@@ -92,45 +93,188 @@ scripts/
 - Windows machine
 - Node.js 20+
 - npm 10+
-- An authorized `@blackbuck.com` Google account
-- Local browser access for the one-time manual login setup
+- Playwright Chromium installed
+- Access to the restricted Google Form
+- Authorized Google account for manual login setup
 
-## Setup
+## Environment Setup
 
-1. Copy `.env.example` to `.env`.
-2. Install dependencies:
+This repo now includes a local `.env.local` with the important runtime variables already added.
+The file is ignored by Git.
 
-   ```bash
+If you want to reset it manually:
+
+```powershell
+Copy-Item .env.example .env.local
+```
+
+### Important Variables
+
+| Variable | Required | Example | Purpose |
+| --- | --- | --- | --- |
+| `APP_FORM_URL` | Yes | `https://docs.google.com/forms/.../viewform` | Google Form link used by Playwright |
+| `DEFAULT_MODE` | Yes | `SUBMIT` | Configured run mode. Legacy `DRY_RUN` values are normalized by the current runtime where applicable |
+| `AUTOMATION_SPEED_MODE` | Yes | `normal` | Controls typing and field pacing |
+| `DEBUG_SLOW_MO_MS` | Optional | `250` | Slows Playwright in debug-friendly mode |
+| `MAX_RETRIES` | Yes | `2` | Pre-submit retry attempts |
+| `PERSIST_SCREENSHOTS` | Optional | `false` | Save screenshots in `storage/artifacts` |
+| `PERSIST_RUN_REPORTS` | Optional | `false` | Save JSON reports in `storage/artifacts` |
+
+### Current `.env.local`
+
+```dotenv
+APP_FORM_URL=https://docs.google.com/forms/d/e/1FAIpQLSeElvHr-D5FXndyGFdk5VrcNKprY_wakDRGlmNJytjInZRaUA/viewform
+DEFAULT_MODE=SUBMIT
+AUTOMATION_SPEED_MODE=normal
+DEBUG_SLOW_MO_MS=250
+MAX_RETRIES=2
+PERSIST_SCREENSHOTS=false
+PERSIST_RUN_REPORTS=false
+```
+
+## First-Time Setup
+
+1. Install dependencies.
+
+   ```powershell
    npm install
    ```
 
-3. Install Playwright Chromium if needed:
+2. Install Playwright Chromium.
 
-   ```bash
+   ```powershell
    npx playwright install chromium
    ```
 
-4. Prepare local storage:
+3. Prepare local storage files and folders.
 
-   ```bash
+   ```powershell
    npm run prepare:storage
    ```
 
-5. Start the app:
+4. Start the website.
 
-   ```bash
+   ```powershell
    npm run dev
    ```
 
-6. Open:
+5. Open the local app in your browser.
 
    ```text
    http://localhost:3000
    ```
 
-## Main Commands
+## Full Working Flow
 
-```bash
+### 1. Start the Website
+
+Run:
+
+```powershell
+npm run dev
+```
+
+The home route redirects to `/dashboard`.
+
+### 2. Complete One-Time Login Setup
+
+Do this before running a real submission.
+
+1. Open `/settings` or `/dashboard`
+2. Click `Start Login Setup`
+3. A Playwright browser session opens
+4. Log in manually using the authorized Google account
+5. Wait until the Google Form is fully visible
+6. Return to the app and click `Finish Login Setup`
+7. The session is saved in:
+   - `storage/auth/storage-state.json`
+   - `storage/auth/auth-metadata.json`
+
+If you make a mistake, click `Cancel`.
+
+### 3. Run a Single Submission
+
+Go to `/submissions/new`.
+
+1. Fill Page 1 common fields:
+   - FO Number
+   - Call Status
+   - OMC
+   - No of Trucks
+   - Fueling Potential
+   - Fueling Frequency
+2. Select a supported `Call Status`
+3. Fill the branch fields that appear for that Call Status
+4. Fill `Remarks`
+5. Click `Preview Submission`
+6. Confirm the preview
+7. Watch the progress panel on the right
+8. Review final status and artifacts if enabled
+
+### 4. Run a Bulk Submission
+
+Go to `/batch`.
+
+1. Paste FO numbers
+   - line separated
+   - comma separated
+   - or JSON array
+2. Set `Delay Between Forms`
+3. Optionally set `Target Forms per Minute`
+4. Fill the shared fields that should be reused across every row
+5. Choose the `Call Status`
+6. Fill branch-specific fields
+7. Fill `Remarks`
+8. Click `Start Batch Loop`
+9. Monitor progress in the batch panel
+
+### 5. Review History
+
+Go to `/history` or check the history section on `/dashboard`.
+
+You can review:
+
+- success / failure state
+- timestamps
+- single runs
+- batch runs
+- related artifacts and logs
+
+### 6. Manage Runtime Data
+
+Go to `/data-management` when you need cleanup.
+
+You can clear:
+
+- run history
+- logs
+- screenshots and reports
+- batch state
+- sample data
+- auth session data
+
+## Storage and Artifacts
+
+### Important Local Paths
+
+- `storage/auth/storage-state.json`
+  - saved Playwright session
+- `storage/auth/auth-metadata.json`
+  - email + validation metadata
+- `storage/history/runs.json`
+  - single run history
+- `storage/history/batch-runs.json`
+  - batch run summary history
+- `storage/history/batch-rows.json`
+  - per-row batch results
+- `storage/logs/*.jsonl`
+  - structured logs
+- `storage/artifacts/<run-or-batch-id>/`
+  - screenshots and JSON reports
+
+## Commands
+
+```powershell
 npm run dev
 npm run build
 npm run start
@@ -140,153 +284,59 @@ npm run prepare:storage
 npm run seed:sample
 ```
 
-## Manual Operator Steps
+## Testing
 
-### One-Time Login Setup
+Run:
 
-1. Open the app and go to `Settings` or `Dashboard`.
-2. Click `Start Login Setup`.
-3. A browser window opens to the restricted Google Form.
-4. Manually sign in using the authorized `@blackbuck.com` account.
-5. Confirm the form loads fully.
-6. Return to the app and click `Finish Login Setup`.
-7. The app saves Playwright `storageState` locally for later reuse.
-
-### Run a Submission
-
-1. Open `New Submission`.
-2. Fill Page 1 common fields.
-3. Pick one supported Call Status.
-4. Fill the branch-specific Page 2 fields.
-5. Fill Page 3 `Remarks`.
-6. Keep `Dry Run` unless you explicitly want a real submission.
-7. Click `Preview Submission`.
-8. Confirm the preview.
-9. Watch the live progress panel.
-
-## Session Expiry and Re-Auth
-
-The tool never stores credentials and never bypasses Google login.
-
-If the saved session expires or loses access:
-
-- the run is blocked safely
-- the UI shows that re-auth is required
-- the operator should repeat the login setup flow
-
-### Refresh Auth Safely
-
-1. Click `Refresh Status`.
-2. If status becomes `REAUTH_REQUIRED` or `FORBIDDEN`, click `Start Login Setup`.
-3. Sign in manually again with the authorized account.
-4. Click `Finish Login Setup`.
-
-## Validation and Safety Notes
-
-- Default mode is `DRY_RUN`.
-- Unsupported call statuses are intentionally blocked in the MVP.
-- Hidden branch fields are cleared when Call Status changes.
-- Browser automation relies on labels, roles, and visible text instead of brittle CSS-only selectors.
-- Submit mode does not auto-retry the final submit click to reduce duplicate submission risk.
-- Screenshots are captured on failure and also at the end of successful runs.
-
-## Local Data Layout
-
-- `storage/auth/storage-state.json`
-  - saved Playwright session
-- `storage/auth/auth-metadata.json`
-  - last saved / validated session metadata
-- `storage/history/runs.json`
-  - completed run history
-- `storage/logs/*.jsonl`
-  - structured logs
-- `storage/artifacts/<run-id>/`
-  - screenshots and JSON reports
-
-## Testing Guide
-
-Run the automated checks:
-
-```bash
+```powershell
 npm run typecheck
 npm run test
 ```
 
-Covered checks include:
+## Manual Verification Checklist
 
-- submission schema validation
-- date/time utilities
-- run store transitions
-- session signal interpretation
+1. `Dashboard` opens
+2. `New Submission` opens
+3. `Batch Submission` opens
+4. `History` opens
+5. `Settings` opens
+6. `Data Management` opens
+7. Login setup can be started and finished manually
+8. One single submission completes
+9. One batch submission completes
+10. History updates after runs
+11. Logs are written in `storage/logs`
+12. Artifacts are written when persistence is enabled
 
-### Manual Verification Checklist
+## Troubleshooting
 
-1. Start the app locally.
-2. Confirm `Dashboard`, `New Submission`, `Batch Upload`, `History`, and `Settings` load.
-3. Confirm `Data Management` loads and shows storage summary.
-3. Run login setup once with the authorized account.
-4. Execute one `DRY_RUN` per supported branch:
-   - Interested
-   - Follow Up
-   - Call Back
-   - Not Interested
-   - Call Disconnected
-   - Call Drop
-   - Not Connected
-   - Language Barrier
-5. Confirm progress updates appear in the side panel.
-6. Confirm `History` shows the completed run.
-7. Confirm logs and screenshot artifacts are saved locally.
-8. Test a forced expired-session scenario by removing the saved session or signing out, then verify the app asks for re-auth.
+### Login setup not working
 
-## Supported MVP Branches
+- Re-run `Start Login Setup`
+- Make sure the Google account has form access
+- Confirm the form page fully loads before clicking `Finish Login Setup`
 
-- Interested
-- Follow Up
-- Call Back
-- Not Interested
-- Call Disconnected
-- Call Drop
-- Not Connected
-- Language Barrier
+### Session expired
 
-## Not Yet Enabled
+- Open `/settings`
+- Click `Refresh Status`
+- If needed, run login setup again
 
-- Google Sheet ingestion
-- Full batch execution UI
-- Multi-operator concurrency controls
-- Artifact preview inside the dashboard
+### Batch stops midway
 
-## Future Extension Notes
+- Open `/history` or `/dashboard`
+- Check the latest batch status
+- Review logs in `storage/logs`
+- Review screenshots / reports in `storage/artifacts`
 
-### Google Sheet Support
+### Form link changed
 
-The architecture already separates:
+Update `APP_FORM_URL` in `.env.local`, then restart the dev server.
 
-- submission schema
-- run queue
-- history persistence
-- batch module contracts
+## Safety Notes
 
-This makes it straightforward to add:
-
-- Google Sheet row ingestion
-- row-level validation
-- continue-on-error execution summaries
-- downloadable batch reports
-
-### Batch Processing
-
-Planned batch behavior:
-
-- max target rows: 50
-- strategy: continue on error
-- reuse the same automation runner per row
-- persist row-level result history and artifacts
-
-## Important Compliance Notes
-
-- Use only an authorized `@blackbuck.com` account.
-- Do not hardcode credentials.
-- Do not attempt to automate sign-in fields or bypass the restricted form.
-- Keep the app local and internal only.
+- Use only an authorized Google account
+- Do not hardcode credentials in code or env files
+- Do not automate the Google login form fields
+- Keep this tool local and internal
+- Enable screenshot/report persistence only when you need artifacts

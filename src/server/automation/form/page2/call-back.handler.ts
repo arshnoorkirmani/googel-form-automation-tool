@@ -11,14 +11,16 @@ export async function handleCallBackBranch(
   page: Page,
   submission: SubmissionPayload
 ): Promise<void> {
-  if (!submission.callBackNextCall) {
+  const callBackNextCall = submission.callBackNextCall;
+
+  if (!callBackNextCall) {
     throw new Error("Call Back branch payload is incomplete.");
   }
 
   await fillDateTimeQuestion(
     page,
-    PAGE_LABELS.callBackNextCall,
-    submission.callBackNextCall
+    PAGE_LABELS.callBackNextCall!,
+    callBackNextCall!
   );
   await clickNext(page);
 }

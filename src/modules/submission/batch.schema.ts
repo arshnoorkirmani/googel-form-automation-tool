@@ -1,7 +1,13 @@
 import { z } from "zod";
 
 import { baseSubmissionSchema } from "./submission.schema";
-import { SUPPORTED_CALL_STATUSES } from "./submission.types";
+import {
+  RANDOM_CALL_STATUS_OPTIONS,
+  RANDOM_CALL_STATUS_VALUE,
+  SUPPORTED_CALL_STATUSES
+} from "./submission.types";
+
+const randomCallStatusOptionSchema = z.enum(RANDOM_CALL_STATUS_OPTIONS);
 
 export const batchSubmissionSchema = baseSubmissionSchema
   .omit({ foNumber: true })
@@ -19,11 +25,25 @@ export const batchSubmissionSchema = baseSubmissionSchema
         (value) =>
           SUPPORTED_CALL_STATUSES.includes(
             value as (typeof SUPPORTED_CALL_STATUSES)[number]
-          ) || value === "Random Unsupported",
-        "Select a valid Call Status or Random Unsupported"
-      )
+          ) || value === RANDOM_CALL_STATUS_VALUE,
+        "Select a valid Call Status or Random Call Status"
+      ),
+    randomCallStatusPool: z
+      .array(randomCallStatusOptionSchema)
+      .default([...RANDOM_CALL_STATUS_OPTIONS])
   })
   .superRefine((values, context) => {
+    if (
+      values.callStatus === RANDOM_CALL_STATUS_VALUE &&
+      values.randomCallStatusPool.length === 0
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["randomCallStatusPool"],
+        message: "Select at least one allowed Call Status for random mode"
+      });
+    }
+
     switch (values.callStatus) {
       case "Interested":
         if (!values.interestedReason) {

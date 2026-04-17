@@ -25,7 +25,8 @@ class AutomationRunner {
     let session: BrowserSession | null = null;
     let page: Page | null = null;
 
-    runStore.setRunning(runId);
+    const running = runStore.setRunning(runId);
+    await historyRepository.append(running);
 
     try {
       await authService.assertValidSession();
@@ -83,19 +84,17 @@ class AutomationRunner {
 
       const remarksResult = await fillRemarksPage(page, submission);
       runStore.addProgress(runId, "REMARKS_FILLED", "Remarks filled");
-      const finalStep = remarksResult.submitted
-        ? "SUBMIT_COMPLETED"
-        : "DRY_RUN_COMPLETED";
-      const finalLabel = remarksResult.submitted
-        ? "Submit completed"
-        : "Dry run completed";
-
-      runStore.addProgress(runId, finalStep, finalLabel, remarksResult.confirmationMessage);
+      runStore.addProgress(
+        runId,
+        "SUBMIT_COMPLETED",
+        "Submit completed",
+        remarksResult.confirmationMessage
+      );
 
       const previewPath = await artifactService.captureScreenshot(
         page,
         runId,
-        remarksResult.submitted ? "submitted" : "dry-run-final"
+        "submitted"
       );
       const reportPath = await artifactService.writeJsonArtifact(
         runId,

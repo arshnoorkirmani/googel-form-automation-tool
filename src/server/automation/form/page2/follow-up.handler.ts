@@ -12,19 +12,22 @@ export async function handleFollowUpBranch(
   page: Page,
   submission: SubmissionPayload
 ): Promise<void> {
-  if (!submission.followUpNextCall || !submission.followUpPlanPitched) {
+  const followUpNextCall = submission.followUpNextCall;
+  const followUpPlanPitched = submission.followUpPlanPitched;
+
+  if (!followUpNextCall || !followUpPlanPitched) {
     throw new Error("Follow Up branch payload is incomplete.");
   }
 
   await fillDateTimeQuestion(
     page,
-    PAGE_LABELS.followUpNextCall,
-    submission.followUpNextCall
+    PAGE_LABELS.followUpNextCall!,
+    followUpNextCall!
   );
   await selectDropdownQuestion(
     page,
-    PAGE_LABELS.followUpPlanPitched,
-    submission.followUpPlanPitched
+    PAGE_LABELS.followUpPlanPitched!,
+    followUpPlanPitched!
   );
   await clickNext(page);
 }

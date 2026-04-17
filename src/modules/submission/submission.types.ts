@@ -1,6 +1,8 @@
 import type { DateTimeValue } from "@/lib/utils/date-time";
 
-export const RUN_MODES = ["DRY_RUN", "SUBMIT"] as const;
+export const ACTIVE_RUN_MODES = ["SUBMIT"] as const;
+export const LEGACY_RUN_MODES = ["DRY_RUN"] as const;
+export const RUN_MODES = [...ACTIVE_RUN_MODES, ...LEGACY_RUN_MODES] as const;
 export type RunMode = (typeof RUN_MODES)[number];
 
 export const SUPPORTED_CALL_STATUSES = [
@@ -22,6 +24,10 @@ export const NO_BRANCH_CALL_STATUSES = [
   "Not Connected",
   "Language Barrier"
 ] as const;
+
+export const RANDOM_CALL_STATUS_VALUE = "Random Unsupported" as const;
+export const RANDOM_CALL_STATUS_OPTIONS = [...NO_BRANCH_CALL_STATUSES] as const;
+export type RandomCallStatusOption = (typeof RANDOM_CALL_STATUS_OPTIONS)[number];
 
 export const ALL_CALL_STATUSES = [
   ...SUPPORTED_CALL_STATUSES,

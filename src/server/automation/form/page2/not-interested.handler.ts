@@ -11,14 +11,16 @@ export async function handleNotInterestedBranch(
   page: Page,
   submission: SubmissionPayload
 ): Promise<void> {
-  if (!submission.notInterestedReason) {
+  const notInterestedReason = submission.notInterestedReason;
+
+  if (!notInterestedReason) {
     throw new Error("Not Interested branch payload is incomplete.");
   }
 
   await selectDropdownQuestion(
     page,
-    PAGE_LABELS.notInterestedReason,
-    submission.notInterestedReason
+    PAGE_LABELS.notInterestedReason!,
+    notInterestedReason!
   );
   await clickNext(page);
 }

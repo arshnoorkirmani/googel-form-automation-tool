@@ -3,12 +3,16 @@ node_modules
 out
 dist
 .env
+.env.local
+.env.*.local
 storage/auth/storage-state.json
 storage/auth/auth-metadata.json
 storage/logs/*.jsonl
 storage/artifacts/*
 !storage/artifacts/.gitkeep
 storage/history/runs.json
+storage/history/batch-runs.json
+storage/history/batch-rows.json
 *.tsbuildinfo
 .DS_Store
 *.log
